@@ -88,13 +88,16 @@ function rebuild() {
 const SLOT_ANGLE = Math.PI / 4;
 
 const capH = 5;
+// Pick a fixed direction for the slot:
+const SLOT_ANGLE = Math.PI / 2; // +Y (use 0, π/2, π, 3π/2 or any angle)
+
 if (params.mount === "standing") {
   const capBottom = new THREE.Mesh(
     buildConformingCap(
       params,
-      0,                 // vFrac: 0 = bottom
+      0,                 // bottom
       capH,
-      undefined,         // use default E27 hole (20 mm radius)
+      /* holeR */ undefined,
       { bottomSlot: true, slotWidth: 8, slotAngle: SLOT_ANGLE }
     ),
     materialOuter
