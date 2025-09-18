@@ -156,7 +156,9 @@ function buildSurface(offsetR=0, isInner=false) {
   const R0 = params.rbase;
   const R1 = R0 * params.topscale;
   const waves = params.waves;
-  const amp = Math.max(0, params.amp - (isInner? params.thick/(R0*1.6) : 0));
+  const baseAmp = params.amp;
+  // inner gets slightly reduced ripple to avoid self-intersections
+  const amp = Math.max(0, baseAmp - (isInner? params.wallFixed/(R0*1.6) : 0));
   const twist = THREE.MathUtils.degToRad(params.twist);
 
   const verts = new Float32Array((radialSeg+1)*(heightSeg+1)*3);
@@ -168,12 +170,13 @@ function buildSurface(offsetR=0, isInner=false) {
     for (let i=0;i<=radialSeg;i++){
       const u = i/radialSeg;
       const ang = u * Math.PI*2;
-      const br = baseRadius(v, R0, R1) + (isInner? -params.thick : 0) + offsetR;
+      // offset inward by wall for inner surface only
+      const baseR = baseRadius(v, R0, R1) + (isInner? -params.wallFixed : 0) + offsetR;
       let r;
       if (params.ripdir === 'vertical') {
-        r = br * (1 + amp * Math.sin(waves*ang + phase));
+        r = baseR * (1 + amp * Math.sin(waves*ang + phase));
       } else {
-        r = br * (1 + amp * Math.sin((waves*2*Math.PI)*v + 1.5*ang));
+        r = baseR * (1 + amp * Math.sin((waves*2*Math.PI)*v + 1.5*ang));
       }
       verts[p++] = r * Math.cos(ang);
       verts[p++] = r * Math.sin(ang);
