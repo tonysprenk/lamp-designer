@@ -116,8 +116,26 @@ const params = {
 };
 
 function makeMaterial() {
-  const finish = params.finish;
-  const common = { clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.FrontSide };
+  const glossy = { clearcoat:1.0, clearcoatRoughness:0.04, roughness:0.12, envMapIntensity:1.3, side:THREE.DoubleSide };
+  switch (params.finish) {
+    case 'translucent_white':
+      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xffffff, transmission:0.55, thickness:3.0, metalness:0.0, ...glossy });
+      break;
+    case 'bronze':
+      materialOuter = new THREE.MeshPhysicalMaterial({ color:0x8c6a3f, metalness:1.0, roughness:0.22, ...glossy });
+      break;
+    case 'silver':
+      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xcfd3d8, metalness:1.0, roughness:0.12, ...glossy });
+      break;
+    case 'gold':
+      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xd4af37, metalness:1.0, roughness:0.18, ...glossy });
+      break;
+    case 'opaque_white':
+    default:
+      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, metalness:0.0, ...glossy });
+      break;
+  }
+};
   if (finish === 'translucent_white') {
     materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
   } else if (finish === 'bronze') {
@@ -137,8 +155,8 @@ function baseRadius(t, R0, R1) {
 }
 
 function buildSurface() {
-  const radialSeg = params.res==='low'? 80 : (params.res==='med'? 160 : 240);
-  const heightSeg = params.res==='low'? 110 : (params.res==='med'? 180 : 300);
+  const radialSeg = params.res==='low'? 96 : (params.res==='med'? 180 : 300);
+  const heightSeg = params.res==='low'? 120 : (params.res==='med'? 220 : 360);
 
   const H = params.height;
   const R0 = params.rbase;
@@ -146,16 +164,18 @@ function buildSurface() {
   const waves = params.waves;
   const amp = params.amp;
   const twist = THREE.MathUtils.degToRad(params.twist);
+  const EPS = 1e-4; // tiny offset to avoid coplanar/precision cracks
 
-  const verts = new Float32Array((radialSeg+1)*(heightSeg+1)*3);
+  // Generate WITHOUT duplicate seam column; we wrap by modulo when indexing.
+  const verts = new Float32Array((radialSeg)*(heightSeg+1)*3);
   let p=0;
   for (let j=0;j<=heightSeg;j++){
     const v = j/heightSeg;
     const z = H * v;
     const phase = twist * v;
-    for (let i=0;i<=radialSeg;i++){
+    for (let i=0;i<radialSeg;i++){
       const u = i/radialSeg;
-      const ang = u * Math.PI*2;
+      const ang = u * Math.PI*2 + EPS; // nudge to avoid exact overlap
       const br = baseRadius(v, R0, R1);
       const r = (params.ripdir === 'vertical')
         ? br * (1 + amp * Math.sin(waves*ang + phase))
@@ -167,20 +187,26 @@ function buildSurface() {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(verts,3));
+
+  // Indices with modulo wrap so the seam is truly closed (no duplicate vertices)
   const idx = new Uint32Array(radialSeg*heightSeg*6);
   let k=0;
   for (let j=0;j<heightSeg;j++){
     for (let i=0;i<radialSeg;i++){
-      const a = j*(radialSeg+1)+i;
-      const b = a+1;
-      const c = a+(radialSeg+1);
-      const d = c+1;
+      const i2 = (i+1) % radialSeg;
+      const a = j*radialSeg + i;
+      const b = j*radialSeg + i2;
+      const c = (j+1)*radialSeg + i;
+      const d = (j+1)*radialSeg + i2;
       idx[k++]=a; idx[k++]=c; idx[k++]=b; idx[k++]=b; idx[k++]=c; idx[k++]=d;
     }
   }
   geo.setIndex(new THREE.BufferAttribute(idx,1));
-  geo.computeVertexNormals();
-  return geo;
+
+  // Convert to non-indexed to eliminate any seam-normal discontinuity and recompute normals
+  const smooth = geo.toNonIndexed();
+  smooth.computeVertexNormals();
+  return smooth;
 }
 
 function rebuild(){
