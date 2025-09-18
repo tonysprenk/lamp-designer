@@ -92,11 +92,12 @@ function rebuild() {
   } else {
     // Hanging: cable up from top + top cap extruded downward to the top
     const cable = new THREE.Mesh(
-      new THREE.CylinderGeometry(2, 2, 300, 24),
-      new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
-    );
-    cable.position.z = params.height + 150;
-    group.add(cable);
+  new THREE.CylinderGeometry(2, 2, 300, 24),
+  new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
+);
+cable.rotation.x = Math.PI / 2;              // align along Z
+cable.position.z = params.height + 150;      // put it above the top cap
+group.add(cable);
 
     const capTop = new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter);
     group.add(capTop);
