@@ -84,24 +84,30 @@ function rebuild() {
   group.add(body);
 
   // Conforming cap(s) with fixed E27 hole (caps.js default holeR=20mm)
-  const capH = 5;
-  if (params.mount === "standing") {
-    // Bottom cap extrudes upward from z=0
-    const capBottom = new THREE.Mesh(buildConformingCap(params, 0, capH), materialOuter);
-    group.add(capBottom);
-  } else {
-    // Hanging: cable up from top + top cap extruded downward to the top
-    const cable = new THREE.Mesh(
-  new THREE.CylinderGeometry(2, 2, 300, 24),
-  new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
-);
-cable.rotation.x = Math.PI / 2;              // align along Z
-cable.position.z = params.height + 150;      // put it above the top cap
-group.add(cable);
+  // src/main.js (inside rebuild)
+const capH = 5;
 
-    const capTop = new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter);
-    group.add(capTop);
-  }
+if (params.mount === "standing") {
+  // Bottom cap with side cable slot (default width 8 mm, direction 0 rad = +X)
+  const capBottom = new THREE.Mesh(
+    buildConformingCap(params, 0, capH, /*holeR=*/20, { bottomSlot: true, slotWidth: 8, slotAngle: 0 }),
+    materialOuter
+  );
+  group.add(capBottom);
+} else {
+  // Hanging cable (rotate to align with +Z)
+  const cable = new THREE.Mesh(
+    new THREE.CylinderGeometry(2, 2, 300, 24),
+    new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
+  );
+  cable.rotation.x = Math.PI / 2;
+  cable.position.z = params.height + 150;
+  group.add(cable);
+
+  // Top cap (no slot)
+  const capTop = new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter);
+  group.add(capTop);
+}
 
   // Grounding + camera target
   group.position.z = 0; // base sits on z=0
