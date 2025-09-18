@@ -85,12 +85,18 @@ function rebuild() {
 
   // Conforming cap(s) with fixed E27 hole (caps.js default holeR=20mm)
   // src/main.js (inside rebuild)
-const capH = 5;
+const SLOT_ANGLE = Math.PI / 4;
 
+const capH = 5;
 if (params.mount === "standing") {
-  // Bottom cap with side cable slot (default width 8 mm, direction 0 rad = +X)
   const capBottom = new THREE.Mesh(
-    buildConformingCap(params, 0, capH, /*holeR=*/20, { bottomSlot: true, slotWidth: 8, slotAngle: 3 * Math.PI / 2 }),
+    buildConformingCap(
+      params,
+      0,                 // vFrac: 0 = bottom
+      capH,
+      undefined,         // use default E27 hole (20 mm radius)
+      { bottomSlot: true, slotWidth: 8, slotAngle: SLOT_ANGLE }
+    ),
     materialOuter
   );
   group.add(capBottom);
