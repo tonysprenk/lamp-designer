@@ -4,7 +4,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 import { params, clampForBambu } from "@app/params.js";
 import { makeMaterial } from "@app/materials.js";
-import { buildSurface, baseRadius } from "@app/geometry.js";
+import { buildSurface } from "@app/geometry.js";
 import { buildConformingCap } from "@app/caps.js";
 import { bindRange, bindSelect } from "@app/ui.js";
 
@@ -52,8 +52,6 @@ function rebuild(){
   setL("waves",params.waves);
   setL("amp",Number(params.amp).toFixed(2));
   setL("twist",params.twist);
-  setL("top",params.topHole);
-  setL("bottom",params.bottomHole);
 
   if(group){ scene.remove(group); group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); }
   group = new THREE.Group();
@@ -64,16 +62,17 @@ function rebuild(){
   const body = new THREE.Mesh(buildSurface(params), materialOuter);
   group.add(body);
 
-  // Conforming cap(s)
+  // Conforming cap(s) with E27 hole
   const capH = 5;
   if (params.mount === "standing") {
-  group.add(new THREE.Mesh(buildConformingCap(params, 0, capH), materialOuter));
-} else {
-  const cable = new THREE.Mesh(new THREE.CylinderGeometry(2,2,300,24), new THREE.MeshPhysicalMaterial({ color:0x111111, roughness:0.9 }));
-  cable.position.z = params.height + 150;
-  group.add(cable);
-  group.add(new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter));
-}
+    group.add(new THREE.Mesh(buildConformingCap(params, 0, capH), materialOuter));
+  } else {
+    // cable
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(2,2,300,24), new THREE.MeshPhysicalMaterial({ color:0x111111, roughness:0.9 }));
+    cable.position.z = params.height + 150;
+    group.add(cable);
+    group.add(new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter));
+  }
 
   // Grounding + camera target
   group.position.z = 0;
@@ -83,15 +82,13 @@ function rebuild(){
   scene.add(group);
 }
 
-// UI wiring
+// UI wiring (null-safe)
 bindRange("height","height",params,rebuild);
 bindRange("rbase","rbase",params,rebuild);
 bindRange("topscale","topscale",params,rebuild, v=>Number(v).toFixed(2));
 bindRange("waves","waves",params,rebuild);
 bindRange("amp","amp",params,rebuild, v=>Number(v).toFixed(2));
 bindRange("twist","twist",params,rebuild);
-bindRange("topHole","topHole",params,rebuild);
-bindRange("bottomHole","bottomHole",params,rebuild);
 bindSelect("ripdir","ripdir",params,rebuild);
 bindSelect("finish","finish",params,rebuild);
 bindSelect("res","res",params,rebuild);
