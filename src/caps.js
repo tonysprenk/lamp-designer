@@ -3,9 +3,18 @@ import * as THREE from "three";
 import { innerRadiusAt } from "./geometry.js";
 
 /**
- * Cap that conforms to the inner profile at vFrac (0 bottom, 1 top) and
- * is extruded along +Z by capH. Includes a central E27 hole (default 20 mm R).
- * Optional radial cable slot runs from the hole edge to the rim at angle theta.
+ * Conforming cap at vFrac (0 bottom, 1 top) extruded along +Z by capH.
+ * Includes central E27 hole (default 20 mm radius).
+ * Optionally adds a radial cable slot from the hole edge to the rim.
+ *
+ * @param {object} p
+ * @param {number} vFrac      0 = bottom, 1 = top
+ * @param {number} capH       cap thickness (mm)
+ * @param {number} holeR      E27 hole radius (mm), default 20
+ * @param {object} options    { bottomSlot?: boolean, slotWidth?: number, slotAngle?: number }
+ *                            - bottomSlot: only when vFrac===0
+ *                            - slotWidth:  default 8 mm (min 6)
+ *                            - slotAngle:  radians; 0=+X, π/2=+Y, π=−X, 3π/2=−Y
  */
 export function buildConformingCap(
   p,
@@ -17,12 +26,12 @@ export function buildConformingCap(
   const radialSeg = p.res === "low" ? 96 : (p.res === "med" ? 180 : 300);
   const EPS = 1e-4;
 
-  // Outer boundary: follow inner wall at this height
+  // Outer boundary: inner wall profile at this height
   const shape = new THREE.Shape();
   for (let i = 0; i <= radialSeg; i++) {
     const u = (i % radialSeg) / radialSeg;
     const ang = u * 2 * Math.PI + EPS;
-    const r = innerRadiusAt(p, vFrac, ang) * 0.995;
+    const r = innerRadiusAt(p, vFrac, ang) * 0.995; // slight shrink avoids z-fighting
     const x = r * Math.cos(ang), y = r * Math.sin(ang);
     if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
   }
@@ -31,15 +40,18 @@ export function buildConformingCap(
   // Central E27 hole
   addCircleHole(shape, holeR, 96);
 
-  // Optional cable slot (bottom cap only)
+  // Optional cable slot (only for bottom cap)
   if (options.bottomSlot && vFrac === 0) {
     const theta = (typeof options.slotAngle === "number") ? options.slotAngle : 0;
     const width = Math.max(6, options.slotWidth || 8);
 
-    // Clamp inner to hole edge, outer to rim at this angle
+    // Clamp inner to hole edge; measure rim at this angle
     const rInner = holeR;
-    const rOuter = innerRadiusAt(p, vFrac, theta) * 0.995;
-    if (rOuter > rInner + 2) addRadialSlot(shape, rInner, rOuter, width, theta);
+    const rOuterRim = innerRadiusAt(p, vFrac, theta) * 0.995;
+
+    if (rOuterRim > rInner + 2) {
+      addRadialSlot(shape, rInner, rOuterRim, width, theta);
+    }
   }
 
   // Extrude along +Z
@@ -67,40 +79,36 @@ function addCircleHole(shape, radius, seg = 64) {
 }
 
 /**
- * Add a straight radial slot (“pill”): from rInner (hole edge) to rOuter (rim),
- * centered at angle theta, width `width`. Semicircle caps are swept so that
- * the flat edges are tangent to the slot, avoiding the 90°-off artifact.
- *
- * theta reference: 0=+X, π/2=+Y, π=−X, 3π/2=−Y
+ * Straight radial “pill” slot from rInner (E27 edge) to rim.
+ * We overshoot the rim by (width/2 + 0.6) so the cap outline trims it flush.
+ * Semicircle caps are swept along the slot direction (no 90° flip).
  */
-function addRadialSlot(shape, rInner, rOuter, width, theta, seg = 48) {
+function addRadialSlot(shape, rInner, rOuterRim, width, theta, seg = 48) {
   const halfW = width / 2;
+  const overshoot = 0.6;                   // small extra so trimming is clean
 
-  // Unit vectors: u = radial direction, v = perp for width
+  // Radial (u) and perpendicular (v)
   const ux = Math.cos(theta), uy = Math.sin(theta);
   const vx = -uy, vy = ux;
 
   // Centers of rounded ends
-  const p0x = ux * rInner, p0y = uy * rInner; // inner end (hole edge)
-  const p1x = ux * rOuter, p1y = uy * rOuter; // outer end (rim)
+  const rOuterEnd = rOuterRim + halfW + overshoot; // go past rim
+  const p0x = ux * rInner,     p0y = uy * rInner;      // inner end (at hole)
+  const p1x = ux * rOuterEnd,  p1y = uy * rOuterEnd;   // outer end (beyond rim)
 
   const slot = new THREE.Path();
 
-  // Start on the "right" edge at inner end
+  // Right edge (inner → outer)
   slot.moveTo(p0x + vx * halfW, p0y + vy * halfW);
-  // Straight to right edge at outer end
   slot.lineTo(p1x + vx * halfW, p1y + vy * halfW);
 
-  // --- Outer semicircle ---
-  // Current point corresponds to angle θ+π/2 (vector +v from center).
-  // Sweep to θ−π/2 to reach the left edge, keeping tangency.
+  // Outer semicircle: sweep from θ+π/2 → θ−π/2 (faces along +u)
   arcPoints(slot, p1x, p1y, halfW, theta + Math.PI / 2, theta - Math.PI / 2, seg);
 
-  // Back along the left edge
+  // Left edge (outer → inner)
   slot.lineTo(p0x - vx * halfW, p0y - vy * halfW);
 
-  // --- Inner semicircle ---
-  // Current point is θ−π/2 at inner center; sweep back to θ+π/2.
+  // Inner semicircle: sweep from θ−π/2 → θ+π/2 (tangent to hole)
   arcPoints(slot, p0x, p0y, halfW, theta - Math.PI / 2, theta + Math.PI / 2, seg);
 
   slot.closePath();
