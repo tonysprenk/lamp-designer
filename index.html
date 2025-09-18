@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Organic Lamp Designer — Vase Mode (Bambu X1C Safe)</title>
+  <title>Organic Lamp Designer — Vase Mode (Bambu X1C Safe) v1.1.0</title>
   <style>
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b0e12; color:#e8eef7; }
     #app { display: grid; grid-template-columns: 360px 1fr; height: 100%; }
@@ -24,8 +24,8 @@
   const v = window.APP_VERSION;
   const importmap = {
     imports: {
-      "three": `https://unpkg.com/three@0.160.0/build/three.module.js?v=${v}`,
-      "three/addons/": `https://unpkg.com/three@0.160.0/examples/jsm/?v=${v}`
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
     }
   };
   const s = document.createElement('script');
@@ -87,6 +87,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 const canvas = document.getElementById('canvas');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+console.log('Lamp Designer version 1.1.0 loaded');
 renderer.setSize(window.innerWidth-360, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
