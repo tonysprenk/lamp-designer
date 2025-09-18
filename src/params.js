@@ -5,12 +5,10 @@ export const params = {
   waves: 18,
   amp: 0.22,
   twist: 420,
-  topHole: 36,
-  bottomHole: 140,
   ripdir: "vertical",
   finish: "opaque_white",
   res: "med",
-  wallFixed: 0.7,   // vase-mode wall for manufacturing
+  wallFixed: 0.7,
   mount: "standing"
 };
 
