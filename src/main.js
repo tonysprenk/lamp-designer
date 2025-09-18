@@ -67,14 +67,13 @@ function rebuild(){
   // Conforming cap(s)
   const capH = 5;
   if (params.mount === "standing") {
-    group.add(new THREE.Mesh(buildConformingCap(params, 0, params.bottomHole/2, capH), materialOuter));
-  } else {
-    // cable
-    const cable = new THREE.Mesh(new THREE.CylinderGeometry(2,2,300,24), new THREE.MeshPhysicalMaterial({ color:0x111111, roughness:0.9 }));
-    cable.position.z = params.height + 150;
-    group.add(cable);
-    group.add(new THREE.Mesh(buildConformingCap(params, 1, params.topHole/2, capH), materialOuter));
-  }
+  group.add(new THREE.Mesh(buildConformingCap(params, 0, capH), materialOuter));
+} else {
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(2,2,300,24), new THREE.MeshPhysicalMaterial({ color:0x111111, roughness:0.9 }));
+  cable.position.z = params.height + 150;
+  group.add(cable);
+  group.add(new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter));
+}
 
   // Grounding + camera target
   group.position.z = 0;
