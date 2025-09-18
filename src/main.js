@@ -85,7 +85,7 @@ function rebuild() {
 
   // Conforming cap(s) with fixed E27 hole (caps.js default holeR=20mm)
   // src/main.js (inside rebuild)
-const SLOT_ANGLE = Math.PI / 4;
+
 
 const capH = 5;
 // Pick a fixed direction for the slot:
