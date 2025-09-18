@@ -119,15 +119,15 @@ function makeMaterial() {
   const finish = params.finish;
   const common = { clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.FrontSide };
   if (finish === 'translucent_white') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xffffff, transmission:0.55, thickness: 3.0, ...common });
+    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
   } else if (finish === 'bronze') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0x8c6a3f, metalness:1.0, roughness:0.25, ...common });
+    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
   } else if (finish === 'silver') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xcfd3d8, metalness:1.0, roughness:0.15, ...common });
+    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
   } else if (finish === 'gold') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xd4af37, metalness:1.0, roughness:0.22, ...common });
+    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
   } else { // opaque_white gloss
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, ...common });
+    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
   }
 }
 
@@ -214,7 +214,7 @@ function rebuild(){
   group.add(outerMesh);
 
   // Visual openings (preview only)
-  const holeMat = new THREE.MeshStandardMaterial({ color:0x0b0e12, metalness:0.0, roughness:1.0, side:THREE.DoubleSide });
+  const holeMat = new THREE.MeshStandardMaterial({ color:0x0b0e12, metalness:0.0, roughness:1.0, side:THREE.DoubleSide, polygonOffset:true, polygonOffsetFactor:1, polygonOffsetUnits:1 });
   const tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, params.height*2, 96), holeMat);
   tCyl.rotation.x = Math.PI/2; tCyl.position.z = params.height - 0.01;
   const bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, params.height*2, 96), holeMat);
