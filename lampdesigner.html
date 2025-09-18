@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Organic Lamp Designer</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b0e12; color:#e8eef7; }
+    #app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
+    aside { padding: 16px; border-right: 1px solid #1b2230; overflow:auto; background:#101620; }
+    h1 { font-size: 18px; margin: 0 0 12px; color:#cfe0ff; }
+    .row { margin: 10px 0 18px; }
+    .row label { display:flex; justify-content:space-between; font-size:12px; color:#9bb0cc; margin-bottom:6px; }
+    .row input[type=range] { width: 100%; }
+    .row input[type=number] { width:100%; padding:6px 8px; border-radius:8px; border:1px solid #293248; background:#0f141e; color:#e8eef7; }
+    .grp { margin-top: 20px; padding-top: 14px; border-top: 1px dashed #263049; }
+    button { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #31507a; background:#18253a; color:#e8eef7; cursor:pointer; }
+    button:hover { filter: brightness(1.1); }
+    #canvas { display:block; width:100%; height:100%; }
+    .tiny { font-size:11px; color:#8aa4c8; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>Organic Lamp Designer</h1>
+    <div class="tiny">Live, fast preview. Export watertight STL for printing.</div>
+
+    <div class="grp">
+      <div class="row"><label><span>Height (mm)</span><span id="val_height"></span></label>
+        <input id="height" type="range" min="120" max="400" step="1" value="230"></div>
+      <div class="row"><label><span>Base Radius (mm)</span><span id="val_rbase"></span></label>
+        <input id="rbase" type="range" min="50" max="140" step="1" value="85"></div>
+      <div class="row"><label><span>Top Scale (0.4–1.2)</span><span id="val_topscale"></span></label>
+        <input id="topscale" type="range" min="0.4" max="1.2" step="0.01" value="0.70"></div>
+      <div class="row"><label><span>Waves</span><span id="val_waves"></span></label>
+        <input id="waves" type="range" min="6" max="36" step="1" value="18"></div>
+      <div class="row"><label><span>Ripple Amplitude (0–0.35)</span><span id="val_amp"></span></label>
+        <input id="amp" type="range" min="0" max="0.35" step="0.01" value="0.22"></div>
+      <div class="row"><label><span>Twist (°)</span><span id="val_twist"></span></label>
+        <input id="twist" type="range" min="0" max="900" step="10" value="420"></div>
+      <div class="row"><label><span>Wall Thickness (mm)</span><span id="val_thick"></span></label>
+        <input id="thick" type="range" min="0.8" max="4" step="0.1" value="2.0"></div>
+    </div>
+
+    <div class="grp">
+      <div class="row"><label><span>Top Opening Ø (mm)</span><span id="val_top"></span></label>
+        <input id="topHole" type="range" min="10" max="70" step="1" value="36"></div>
+      <div class="row"><label><span>Bottom Opening Ø (mm)</span><span id="val_bottom"></span></label>
+        <input id="bottomHole" type="range" min="60" max="220" step="1" value="140"></div>
+      <div class="row"><label><span>Vertical vs Horizontal ripples</span><span id="val_vh"></span></label>
+        <input id="vh" type="range" min="0" max="1" step="1" value="0">
+        <div class="tiny">0 = vertical folds (around circumf.) • 1 = horizontal rings</div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="row"><label><span>Standing or Hanging</span></label>
+        <select id="mount">
+          <option value="hanging" selected>Hanging (top lip)</option>
+          <option value="standing">Standing (flat top)</option>
+        </select>
+      </div>
+      <div class="row"><label><span>Resolution</span></label>
+        <select id="res">
+          <option value="low">Low (fast)</option>
+          <option value="med" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="row"><button id="download">Download STL</button></div>
+    </div>
+
+    <div class="tiny grp">Tip: Use Low for editing, High for export. Keep amplitude ≤ 0.3 for clean meshes.</div>
+  </aside>
+  <canvas id="canvas"></canvas>
+</div>
+
+<!-- Three.js & helpers -->
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.160.0/examples/js/exporters/STLExporter.js"></script>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0e12);
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+  camera.position.set(240, 180, 280);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
+  // Lights
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.7);
+  scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(2,3,2); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x99ccff, 0.3); rim.position.set(-3,4,-2); scene.add(rim);
+
+  // Ground
+  const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
+  grid.position.y = -0.01; scene.add(grid);
+
+  let meshOuter, meshInner, meshLip, group;
+  const material = new THREE.MeshPhysicalMaterial({
+    roughness: 0.6, metalness: 0.0, clearcoat: 0.15, transmission: 0.0, thickness: 2.0, color: 0xdde7ff
+  });
+
+  const params = {
+    height: 230,
+    rbase: 85,
+    topscale: 0.70,
+    waves: 18,
+    amp: 0.22,
+    twist: 420,
+    thick: 2.0,
+    topHole: 36,
+    bottomHole: 140,
+    vh: 0, // 0 vertical ripples, 1 horizontal rings
+    mount: 'hanging',
+    res: 'med'
+  };
+
+  // UI binding helpers
+  const bindRange = (id, key, fmt=(v)=>v) => {
+    const el = document.getElementById(id);
+    const label = document.getElementById('val_' + id.replace(/([A-Z]).*/, '$1').toLowerCase()) || document.getElementById('val_' + id) ;
+    const update = () => { params[key] = Number(el.value); if(label) label.textContent = fmt(el.value); rebuild(); };
+    el.addEventListener('input', update); update();
+  };
+
+  // Attach ranges
+  bindRange('height','height');
+  bindRange('rbase','rbase');
+  bindRange('topscale','topscale', v=>Number(v).toFixed(2));
+  bindRange('waves','waves');
+  bindRange('amp','amp', v=>Number(v).toFixed(2));
+  bindRange('twist','twist');
+  bindRange('thick','thick', v=>Number(v).toFixed(1));
+  bindRange('topHole','topHole');
+  bindRange('bottomHole','bottomHole');
+  bindRange('vh','vh');
+
+  document.getElementById('mount').addEventListener('change', (e)=>{ params.mount = e.target.value; rebuild(); });
+  document.getElementById('res').addEventListener('change', (e)=>{ params.res = e.target.value; rebuild(); });
+
+  document.getElementById('download').addEventListener('click', () => {
+    const exporter = new THREE.STLExporter();
+    const stlString = exporter.parse(group, { binary: false });
+    const blob = new Blob([stlString], {type: 'application/sla'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'organic_lamp.stl';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function buildGeometry()
+  {
+    const radialSeg = params.res==='low'? 80 : (params.res==='med'? 160 : 240);
+    const heightSeg = params.res==='low'? 100 : (params.res==='med'? 180 : 280);
+
+    const H = params.height;
+    const R0 = params.rbase;
+    const R1 = R0 * params.topscale;
+    const waves = params.waves;
+    const amp = params.amp;
+    const twist = THREE.MathUtils.degToRad(params.twist);
+
+    // helper to compute base radius vs height (ease-in-out towards mid belly)
+    function baseRadius(t){ // t in [0,1]
+      const midBoost = 0.18; // belly amount
+      const s = t<0.5 ? smoothstep(0,0.5,t) : 1-smoothstep(0.5,1,t);
+      const belly = 1 + midBoost * (1 - Math.pow(Math.abs(2*t-1), 1.4));
+      const r = THREE.MathUtils.lerp(R0, R1, t) * belly;
+      return r;
+    }
+    function ampEnvelope(t){ return amp * (1 - Math.pow(Math.abs(2*t-1), 1.3)); }
+    function smoothstep(a,b,x){ const y=Math.min(Math.max((x-a)/(b-a),0),1); return y*y*(3-2*y); }
+
+    // Build parametric tube (outer and inner) as BufferGeometry
+    const createSurface = (offsetR=0, inner=false) => {
+      const verts = new Float32Array((radialSeg+1)*(heightSeg+1)*3);
+      const uvs   = new Float32Array((radialSeg+1)*(heightSeg+1)*2);
+      let p=0, q=0;
+      for (let j=0;j<=heightSeg;j++){
+        const v = j/heightSeg;
+        const z = H * v;
+        const phase = twist * v;
+        for (let i=0;i<=radialSeg;i++){
+          const u = i/radialSeg; // around 0..1
+          const ang = u * Math.PI*2;
+          const br = baseRadius(v) + offsetR;
+          let r;
+          if (params.vh === 0){
+            r = br * (1 + ampEnvelope(v) * Math.sin(waves*ang + phase));
+          } else {
+            // horizontal rings: modulate along height instead
+            r = br * (1 + amp * Math.sin( (waves*2*Math.PI)*v + 1.5*ang ));
+          }
+          const x = r * Math.cos(ang);
+          const y = r * Math.sin(ang);
+          verts[p++] = x; verts[p++] = y; verts[p++] = z;
+          uvs[q++] = u; uvs[q++] = v;
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(verts,3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uvs,2));
+      // indices
+      const idx = new Uint32Array(radialSeg*heightSeg*6);
+      let k=0;
+      for (let j=0;j<heightSeg;j++){
+        for (let i=0;i<radialSeg;i++){
+          const a = j*(radialSeg+1)+i;
+          const b = a + 1;
+          const c = a + (radialSeg+1);
+          const d = c + 1;
+          if (!inner){ // outer faces
+            idx[k++]=a; idx[k++]=c; idx[k++]=b;
+            idx[k++]=b; idx[k++]=c; idx[k++]=d;
+          } else {     // inner reversed
+            idx[k++]=a; idx[k++]=b; idx[k++]=c;
+            idx[k++]=b; idx[k++]=d; idx[k++]=c;
+          }
+        }
+      }
+      geo.setIndex(new THREE.BufferAttribute(idx,1));
+      geo.computeVertexNormals();
+      return geo;
+    };
+
+    const outer = createSurface(0, false);
+    const inner = createSurface(-params.thick, true);
+
+    // Top & bottom holes as cylinders (for STL export we keep them as separate meshes in group)
+    const cylMat = material;
+    const topCyl = new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, params.height*2, radialSeg);
+    topCyl.translate(0,0, params.height - 0.01);
+    topCyl.rotateX(Math.PI/2); // align if needed (Three's Y-up vs our Z-up)
+
+    const bottomCyl = new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, params.height*2, radialSeg);
+    bottomCyl.translate(0,0, -params.height);
+    bottomCyl.rotateX(Math.PI/2);
+
+    return { outer, inner, topCyl, bottomCyl };
+  }
+
+  function rebuild(){
+    // labels
+    const set = (id,val)=>{ const el=document.getElementById('val_'+id); if(el) el.textContent=String(val); };
+    set('height', params.height); set('rbase', params.rbase); set('topscale', params.topscale.toFixed(2));
+    set('waves', params.waves); set('amp', params.amp.toFixed(2)); set('twist', params.twist);
+    set('thick', params.thick.toFixed(1)); set('top', params.topHole); set('bottom', params.bottomHole); set('vh', params.vh===0?'Vertical':'Horizontal');
+
+    if (group){ scene.remove(group); group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); }
+    group = new THREE.Group();
+
+    const {outer, inner} = buildGeometry();
+
+    meshOuter = new THREE.Mesh(outer, material);
+    meshInner = new THREE.Mesh(inner, material);
+    group.add(meshOuter);
+    group.add(meshInner);
+
+    // Hanging mount: add an inner lip (visual only; STL exporter will include)
+    if (params.mount==='hanging'){
+      const lipGeo = new THREE.CylinderGeometry((params.topHole/2)+2, params.topHole/2, 6, 80);
+      lipGeo.translate(0,0, params.height - 3);
+      meshLip = new THREE.Mesh(lipGeo, material);
+      group.add(meshLip);
+    }
+
+    // Orient to Z-up nicely
+    group.rotation.x = -Math.PI/2; // so height is vertical in world
+
+    scene.add(group);
+  }
+
+  function onResize(){
+    const w = window.innerWidth - 320;
+    const h = window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', onResize);
+  onResize();
+
+  rebuild();
+
+  // animate
+  (function anim(){
+    requestAnimationFrame(anim);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+})();
+</script>
+</body>
+</html>
