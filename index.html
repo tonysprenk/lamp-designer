@@ -3,41 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Organic Lamp Designer — Vase Mode (Bambu X1C Safe) v1.1.0</title>
+  <title>Organic Lamp Designer — Vase Mode (Bambu X1C Safe)</title>
   <style>
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b0e12; color:#e8eef7; }
     #app { display: grid; grid-template-columns: 360px 1fr; height: 100%; }
     aside { padding: 16px; border-right: 1px solid #1b2230; overflow:auto; background:#101620; }
     #canvas { display:block; width:100%; height:100%; }
-    h1 { font-size: 18px; margin: 0 0 8px; color:#cfe0ff; }
+    h1 { font-size: 18px; margin: 0 0 8px; color:#cfe0ff; display:flex; align-items:baseline; gap:8px; }
+    #version { font-size:12px; color:#8aa4c8; }
     .row { margin: 10px 0 16px; }
     label { display:flex; justify-content:space-between; font-size:12px; color:#9bb0cc; margin-bottom:6px; }
     input[type=range], select { width: 100%; }
     .note { font-size:11px; color:#8aa4c8; margin-top:10px; }
   </style>
 
-  <!-- Import map so Safari/GitHub Pages can resolve bare imports -->
-  <!-- Dynamic import map with versioned URLs for reliable cache-busting -->
-<script>
-  // Bump this when you deploy a new build
-  window.APP_VERSION = "0.4.0"; // e.g., 0.4.0, 0.4.1
-  const v = window.APP_VERSION;
-  const importmap = {
-    imports: {
+  <!-- Static import map (no comments; Safari-friendly) -->
+  <script type="importmap">
+  {
+    "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
       "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
     }
-  };
-  const s = document.createElement('script');
-  s.type = 'importmap';
-  s.textContent = JSON.stringify(importmap);
-  document.currentScript.after(s);
-</script>
+  }
+  </script>
+
+  <!-- Version (bump this each deploy) -->
+  <script>
+    window.APP_VERSION = "0.4.2";
+  </script>
 </head>
 <body>
 <div id="app">
   <aside>
-    <h1>Organic Lamp Designer <span id="version" style="font-size:12px;color:#8aa4c8;">v?</span></h1>
+    <h1>Organic Lamp Designer <span id="version"></span></h1>
 
     <div class="row"><label><span>Height (mm)</span><span id="val_height"></span></label><input id="height" type="range" min="120" max="250" value="230"></div>
     <div class="row"><label><span>Base Radius (mm)</span><span id="val_rbase"></span></label><input id="rbase" type="range" min="40" max="120" value="90"></div>
@@ -74,7 +72,7 @@
       </select>
     </div>
 
-    <div class="note">Max size auto-clamped for <b>Bambu Lab X1C</b> (256×256×256&nbsp;mm). Preview is single-wall <b>vase mode</b> (0.7&nbsp;mm internal wall used for manufacturing).</div>
+    <div class="note">Max size auto-clamped for <b>Bambu Lab X1C</b> (256×256×256 mm). Preview is single-wall <b>vase mode</b>; manufacturing uses ~0.7 mm wall internally.</div>
   </aside>
   <canvas id="canvas"></canvas>
 </div>
@@ -85,246 +83,218 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-console.log('Lamp Designer version 1.1.0 loaded');
-renderer.setSize(window.innerWidth-360, window.innerHeight);
+renderer.setSize(window.innerWidth - 360, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0e12);
-console.log(`Organic Lamp Designer v${window.APP_VERSION}`);
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment()).texture; // glossy reflections
+scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
 
-// camera
-const camera = new THREE.PerspectiveCamera(45, (window.innerWidth-360)/window.innerHeight, 0.1, 5000);
+const camera = new THREE.PerspectiveCamera(45, (window.innerWidth - 360) / window.innerHeight, 0.1, 5000);
 camera.position.set(0, -520, 260);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0,0,140);
+controls.target.set(0, 0, 140);
 controls.enableDamping = true;
 controls.update();
 
-// lights
 scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
-const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(200,220,360); scene.add(dir);
+const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+dir.position.set(200, 220, 360);
+scene.add(dir);
 
-// grid
-const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b); grid.position.z=-0.1; scene.add(grid);
+const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
+grid.position.z = -0.1;
+scene.add(grid);
 
 let group;
 let materialOuter;
 
 const params = {
-  height:230, rbase:90, topscale:0.70,
-  waves:18, amp:0.22, twist:420,
-  topHole:36, bottomHole:140,
-  ripdir:'vertical', finish:'opaque_white', res:'med',
-  // internal fixed vase wall used on backend/manufacture exports
-  wallFixed:0.7
+  height: 230,
+  rbase: 90,
+  topscale: 0.70,
+  waves: 18,
+  amp: 0.22,
+  twist: 420,
+  topHole: 36,
+  bottomHole: 140,
+  ripdir: "vertical",
+  finish: "opaque_white",
+  res: "med",
+  wallFixed: 0.7
 };
+
+function setVersion() {
+  var vEl = document.getElementById('version');
+  if (vEl && window.APP_VERSION) {
+    vEl.textContent = "v" + window.APP_VERSION;
+  }
+  if (window.APP_VERSION) {
+    console.log("Organic Lamp Designer v" + window.APP_VERSION);
+  }
+}
 
 function makeMaterial() {
-  // Avoid object spread for maximum Safari compatibility
-  const glossy = { clearcoat:1.0, clearcoatRoughness:0.04, roughness:0.12, envMapIntensity:1.3, side:THREE.DoubleSide };
-  let opts;
+  var glossy = { clearcoat: 1.0, clearcoatRoughness: 0.04, roughness: 0.12, envMapIntensity: 1.3, side: THREE.DoubleSide };
+  var opts;
   switch (params.finish) {
-    case 'translucent_white':
-      opts = { color:0xffffff, transmission:0.55, thickness:3.0, metalness:0.0 };
+    case "translucent_white":
+      opts = { color: 0xffffff, transmission: 0.55, thickness: 3.0, metalness: 0.0 };
       break;
-    case 'bronze':
-      opts = { color:0x8c6a3f, metalness:1.0, roughness:0.22 };
+    case "bronze":
+      opts = { color: 0x8c6a3f, metalness: 1.0, roughness: 0.22 };
       break;
-    case 'silver':
-      opts = { color:0xcfd3d8, metalness:1.0, roughness:0.12 };
+    case "silver":
+      opts = { color: 0xcfd3d8, metalness: 1.0, roughness: 0.12 };
       break;
-    case 'gold':
-      opts = { color:0xd4af37, metalness:1.0, roughness:0.18 };
+    case "gold":
+      opts = { color: 0xd4af37, metalness: 1.0, roughness: 0.18 };
       break;
-    case 'opaque_white':
+    case "opaque_white":
     default:
-      opts = { color:0xf5f7fb, metalness:0.0 };
+      opts = { color: 0xf5f7fb, metalness: 0.0 };
       break;
   }
-  // Merge glossy base
-  const finalOpts = Object.assign({}, glossy, opts);
+  var finalOpts = Object.assign({}, glossy, opts);
   materialOuter = new THREE.MeshPhysicalMaterial(finalOpts);
-};
-  switch (params.finish) {
-    case 'translucent_white':
-      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xffffff, transmission:0.55, thickness:3.0, metalness:0.0, ...glossy });
-      break;
-    case 'bronze':
-      materialOuter = new THREE.MeshPhysicalMaterial({ color:0x8c6a3f, metalness:1.0, roughness:0.22, ...glossy });
-      break;
-    case 'silver':
-      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xcfd3d8, metalness:1.0, roughness:0.12, ...glossy });
-      break;
-    case 'gold':
-      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xd4af37, metalness:1.0, roughness:0.18, ...glossy });
-      break;
-    case 'opaque_white':
-    default:
-      materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, metalness:0.0, ...glossy });
-      break;
-  }
-};
-
-  if (finish === 'translucent_white') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xffffff, transmission:0.55, thickness:3.0, ...base });
-  } else if (finish === 'bronze') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0x8c6a3f, metalness:1.0, roughness:0.25, ...base });
-  } else if (finish === 'silver') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xcfd3d8, metalness:1.0, roughness:0.15, ...base });
-  } else if (finish === 'gold') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xd4af37, metalness:1.0, roughness:0.22, ...base });
-  } else {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, ...base });
-  }
-};
-  if (finish === 'translucent_white') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
-  } else if (finish === 'bronze') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
-  } else if (finish === 'silver') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
-  } else if (finish === 'gold') {
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
-  } else { // opaque_white gloss
-    materialOuter = new THREE.MeshPhysicalMaterial({ color:0xf5f7fb, clearcoat:1.0, clearcoatRoughness:0.05, roughness:0.15, metalness:0.0, envMapIntensity:1.2, side:THREE.DoubleSide });
-  }
 }
 
 function baseRadius(t, R0, R1) {
-  const belly = 1 + 0.18 * (1 - Math.pow(Math.abs(2*t-1), 1.4));
+  var belly = 1 + 0.18 * (1 - Math.pow(Math.abs(2 * t - 1), 1.4));
   return THREE.MathUtils.lerp(R0, R1, t) * belly;
 }
 
+// Seam-safe tube (no duplicate seam column)
 function buildSurface() {
-  const radialSeg = params.res==='low'? 96 : (params.res==='med'? 180 : 300);
-  const heightSeg = params.res==='low'? 120 : (params.res==='med'? 220 : 360);
+  var radialSeg = (params.res === "low") ? 96 : ((params.res === "med") ? 180 : 300);
+  var heightSeg = (params.res === "low") ? 120 : ((params.res === "med") ? 220 : 360);
 
-  const H = params.height;
-  const R0 = params.rbase;
-  const R1 = R0 * params.topscale;
-  const waves = params.waves;
-  const amp = params.amp;
-  const twist = THREE.MathUtils.degToRad(params.twist);
-  const EPS = 1e-4; // tiny offset to avoid coplanar/precision cracks
+  var H = params.height;
+  var R0 = params.rbase;
+  var R1 = R0 * params.topscale;
+  var waves = params.waves;
+  var amp = params.amp;
+  var twist = THREE.MathUtils.degToRad(params.twist);
+  var EPS = 1e-4;
 
-  // Generate WITHOUT duplicate seam column; we wrap by modulo when indexing.
-  const verts = new Float32Array((radialSeg)*(heightSeg+1)*3);
-  let p=0;
-  for (let j=0;j<=heightSeg;j++){
-    const v = j/heightSeg;
-    const z = H * v;
-    const phase = twist * v;
-    for (let i=0;i<radialSeg;i++){
-      const u = i/radialSeg;
-      const ang = u * Math.PI*2 + EPS; // nudge to avoid exact overlap
-      const br = baseRadius(v, R0, R1);
-      const r = (params.ripdir === 'vertical')
-        ? br * (1 + amp * Math.sin(waves*ang + phase))
-        : br * (1 + amp * Math.sin((waves*2*Math.PI)*v + 1.5*ang));
+  var verts = new Float32Array((radialSeg) * (heightSeg + 1) * 3);
+  var p = 0;
+  for (var j = 0; j <= heightSeg; j++) {
+    var v = j / heightSeg;
+    var z = H * v;
+    var phase = twist * v;
+    for (var i = 0; i < radialSeg; i++) {
+      var u = i / radialSeg;
+      var ang = u * Math.PI * 2 + EPS;
+      var br = baseRadius(v, R0, R1);
+      var r = (params.ripdir === "vertical")
+        ? br * (1 + amp * Math.sin(waves * ang + phase))
+        : br * (1 + amp * Math.sin((waves * 2 * Math.PI) * v + 1.5 * ang));
       verts[p++] = r * Math.cos(ang);
       verts[p++] = r * Math.sin(ang);
       verts[p++] = z;
     }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(verts,3));
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
 
-  // Indices with modulo wrap so the seam is truly closed (no duplicate vertices)
-  const idx = new Uint32Array(radialSeg*heightSeg*6);
-  let k=0;
-  for (let j=0;j<heightSeg;j++){
-    for (let i=0;i<radialSeg;i++){
-      const i2 = (i+1) % radialSeg;
-      const a = j*radialSeg + i;
-      const b = j*radialSeg + i2;
-      const c = (j+1)*radialSeg + i;
-      const d = (j+1)*radialSeg + i2;
-      idx[k++]=a; idx[k++]=c; idx[k++]=b; idx[k++]=b; idx[k++]=c; idx[k++]=d;
+  var idx = new Uint32Array(radialSeg * heightSeg * 6);
+  var k = 0;
+  for (var jj = 0; jj < heightSeg; jj++) {
+    for (var ii = 0; ii < radialSeg; ii++) {
+      var i2 = (ii + 1) % radialSeg;
+      var a = jj * radialSeg + ii;
+      var b = jj * radialSeg + i2;
+      var c = (jj + 1) * radialSeg + ii;
+      var d = (jj + 1) * radialSeg + i2;
+      idx[k++] = a; idx[k++] = c; idx[k++] = b;
+      idx[k++] = b; idx[k++] = c; idx[k++] = d;
     }
   }
-  geo.setIndex(new THREE.BufferAttribute(idx,1));
-
-  // Convert to non-indexed to eliminate any seam-normal discontinuity and recompute normals
-  const smooth = geo.toNonIndexed();
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  var smooth = geo.toNonIndexed();
   smooth.computeVertexNormals();
   return smooth;
 }
 
-function rebuild(){
-  // Enforce Bambu X1C volume (256 cube) with a safety margin
-  const safety = 6;
-  const maxHalf = 128 - safety;
-  const bellyMax = 1 + 0.18;
-  const scaleMax = Math.max(1, params.topscale);
-  const radialLimit = maxHalf / ((1 + Math.max(0, params.amp)) * bellyMax * scaleMax);
+function rebuild() {
+  // Clamp to Bambu X1C volume (256³) with margin
+  var safety = 6;
+  var maxHalf = 128 - safety;
+  var bellyMax = 1 + 0.18;
+  var scaleMax = Math.max(1, params.topscale);
+  var radialLimit = maxHalf / ((1 + Math.max(0, params.amp)) * bellyMax * scaleMax);
   if (params.rbase > radialLimit) params.rbase = radialLimit;
   if (params.height > 256 - safety) params.height = 256 - safety;
 
-  const setL=(id,val)=>{const el=document.getElementById('val_'+id); if(el) el.textContent = String(val);};
-  setL('height', Math.round(params.height));
-  setL('rbase', Math.round(params.rbase));
-  setL('topscale', Number(params.topscale).toFixed(2));
-  setL('waves', params.waves);
-  setL('amp', Number(params.amp).toFixed(2));
-  setL('twist', params.twist);
-  setL('top', params.topHole);
-  setL('bottom', params.bottomHole);
+  function setL(id, val) { var el = document.getElementById("val_" + id); if (el) el.textContent = String(val); }
+  setL("height", Math.round(params.height));
+  setL("rbase", Math.round(params.rbase));
+  setL("topscale", Number(params.topscale).toFixed(2));
+  setL("waves", params.waves);
+  setL("amp", Number(params.amp).toFixed(2));
+  setL("twist", params.twist);
+  setL("top", params.topHole);
+  setL("bottom", params.bottomHole);
 
-  if(group){ scene.remove(group); group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); }
+  if (group) { scene.remove(group); group.traverse(function(o){ if (o.geometry) o.geometry.dispose(); }); }
   group = new THREE.Group();
 
   makeMaterial();
 
-  // Single-wall vase preview
-  const outerGeo = buildSurface();
-  const outerMesh = new THREE.Mesh(outerGeo, materialOuter);
+  var outerGeo = buildSurface();
+  var outerMesh = new THREE.Mesh(outerGeo, materialOuter);
   group.add(outerMesh);
 
-  // Visual openings (preview only)
-  const holeMat = new THREE.MeshStandardMaterial({ color:0x0b0e12, metalness:0.0, roughness:1.0, side:THREE.DoubleSide, polygonOffset:true, polygonOffsetFactor:1, polygonOffsetUnits:1 });
-  const tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, params.height*2, 96), holeMat);
-  tCyl.rotation.x = Math.PI/2; tCyl.position.z = params.height - 0.01;
-  const bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, params.height*2, 96), holeMat);
-  bCyl.rotation.x = Math.PI/2; bCyl.position.z = -params.height;
+  // Visual opening guides
+  var holeMat = new THREE.MeshStandardMaterial({ color: 0x0b0e12, metalness: 0.0, roughness: 1.0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  var tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole / 2, params.topHole / 2, params.height * 2, 96), holeMat);
+  tCyl.rotation.x = Math.PI / 2; tCyl.position.z = params.height - 0.01;
+  var bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole / 2, params.bottomHole / 2, params.height * 2, 96), holeMat);
+  bCyl.rotation.x = Math.PI / 2; bCyl.position.z = -params.height;
   group.add(tCyl, bCyl);
 
   scene.add(group);
 }
 
-function bindRange(id,key,fmt){
-  const el=document.getElementById(id); const lab=document.getElementById('val_'+id);
-  function update(){ params[key]=parseFloat(el.value); if(lab) lab.textContent = fmt? fmt(el.value): el.value; rebuild(); }
-  el.addEventListener('input', update); update();
+function bindRange(id, key, fmt) {
+  var el = document.getElementById(id);
+  var lab = document.getElementById("val_" + id);
+  function update() {
+    params[key] = parseFloat(el.value);
+    if (lab) lab.textContent = fmt ? fmt(el.value) : el.value;
+    rebuild();
+  }
+  el.addEventListener("input", update);
+  update();
 }
 
-bindRange('height','height');
-bindRange('rbase','rbase');
-bindRange('topscale','topscale', v=>Number(v).toFixed(2));
-bindRange('waves','waves');
-bindRange('amp','amp', v=>Number(v).toFixed(2));
-bindRange('twist','twist');
-bindRange('topHole','topHole');
-bindRange('bottomHole','bottomHole');
+bindRange("height", "height");
+bindRange("rbase", "rbase");
+bindRange("topscale", "topscale", function(v){ return Number(v).toFixed(2); });
+bindRange("waves", "waves");
+bindRange("amp", "amp", function(v){ return Number(v).toFixed(2); });
+bindRange("twist", "twist");
+bindRange("topHole", "topHole");
+bindRange("bottomHole", "bottomHole");
 
-document.getElementById('ripdir').addEventListener('change', (e)=>{ params.ripdir = e.target.value; rebuild(); });
-document.getElementById('finish').addEventListener('change', (e)=>{ params.finish = e.target.value; rebuild(); });
-document.getElementById('res').addEventListener('change', (e)=>{ params.res = e.target.value; rebuild(); });
+document.getElementById("ripdir").addEventListener("change", function(e){ params.ripdir = e.target.value; rebuild(); });
+document.getElementById("finish").addEventListener("change", function(e){ params.finish = e.target.value; rebuild(); });
+document.getElementById("res").addEventListener("change", function(e){ params.res = e.target.value; rebuild(); });
 
-window.addEventListener('resize',()=>{
-  renderer.setSize(window.innerWidth-360, window.innerHeight);
-  camera.aspect=(window.innerWidth-360)/window.innerHeight;
+window.addEventListener("resize", function(){
+  renderer.setSize(window.innerWidth - 360, window.innerHeight);
+  camera.aspect = (window.innerWidth - 360) / window.innerHeight;
   camera.updateProjectionMatrix();
 });
 
-function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+setVersion();
 rebuild();
-const verEl = document.getElementById('version'); if (verEl) verEl.textContent = `v${window.APP_VERSION}`;
 animate();
 </script>
 </body>
