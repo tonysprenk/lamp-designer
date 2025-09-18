@@ -116,9 +116,10 @@ let materialOuter, materialInner;
 
 const params = {
   height:230, rbase:90, topscale:0.70,
-  waves:18, amp:0.22, twist:420, thick:2.0,
+  waves:18, amp:0.22, twist:420,
   topHole:36, bottomHole:140,
-  ripdir:'vertical', finish:'opaque_white', res:'med'
+  ripdir:'vertical', finish:'opaque_white', res:'med',
+  wallFixed: 0.7 // vase-mode wall (mm)
 };
 
 function makeMaterial() {
@@ -202,15 +203,13 @@ function buildSurface(offsetR=0, isInner=false) {
 }
 
 function rebuild(){
-  // update labels
   const set = (id,val)=>{ const el=document.getElementById('val_'+id); if(el) el.textContent = String(val); };
   set('height', params.height);
   set('rbase', params.rbase);
-  set('topscale', params.topscale.toFixed(2));
+  set('topscale', params.topscale?.toFixed? params.topscale.toFixed(2): params.topscale);
   set('waves', params.waves);
   set('amp', params.amp.toFixed(2));
   set('twist', params.twist);
-  set('thick', params.thick.toFixed(1));
   set('top', params.topHole);
   set('bottom', params.bottomHole);
 
@@ -219,24 +218,21 @@ function rebuild(){
 
   makeMaterial();
 
+  // PREVIEW: single-wall outer only (for vase-mode look)
   const outerGeo = buildSurface(0,false);
-  const innerGeo = buildSurface(0,true);
-
   const outerMesh = new THREE.Mesh(outerGeo, materialOuter);
-  const innerMesh = new THREE.Mesh(innerGeo, materialInner);
-
   group.add(outerMesh);
-  group.add(innerMesh);
 
-  // Simple visual holes (preview only): draw thin cylinders in contrasting color
-  const holeMat = new THREE.MeshStandardMaterial({ color:0x1a283b, metalness:0.0, roughness:1.0 });
-  const tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, params.height*2, 80), holeMat);
+  // Visual openings (not boolean): dim cylinders so you can size holes
+  const holeMat = new THREE.MeshStandardMaterial({ color:0x0b0e12, metalness:0.0, roughness:1.0, side:THREE.DoubleSide });
+  const tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, params.height*2, 100), holeMat);
   tCyl.rotation.x = Math.PI/2; tCyl.position.z = params.height - 0.01;
-  const bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, params.height*2, 80), holeMat);
+  const bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, params.height*2, 100), holeMat);
   bCyl.rotation.x = Math.PI/2; bCyl.position.z = -params.height;
   group.add(tCyl, bCyl);
 
   scene.add(group);
+}
 }
 
 function bindRange(id,key,fmt){
@@ -263,8 +259,16 @@ document.getElementById('res').addEventListener('change', (e)=>{ params.res = e.
 
 // STL download (exports outer+inner surfaces; slicers interpret correctly as closed shell)
 document.getElementById('download').onclick=()=>{
+  // For STL: export a proper thin solid by including an inner surface offset by wallFixed
+  const exportGroup = new THREE.Group();
+  const outer = new THREE.Mesh(buildSurface(0,false), materialOuter);
+  const inner = new THREE.Mesh(buildSurface(0,true), materialOuter);
+  exportGroup.add(outer); exportGroup.add(inner);
   const exporter = new STLExporter();
-  const stl = exporter.parse(group);
+  const stl = exporter.parse(exportGroup);
+  const blob = new Blob([stl],{type:'application/sla'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='organic_lamp_vasemode_'+params.wallFixed+'mm.stl'; a.click();
+};  const stl = exporter.parse(group);
   const blob = new Blob([stl],{type:'application/sla'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='organic_lamp.stl'; a.click();
 };
