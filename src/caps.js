@@ -1,16 +1,22 @@
+// src/caps.js
 import * as THREE from "three";
 import { innerRadiusAt } from "./geometry.js";
 
 /**
- * Conforming cap extruded along +Z that matches the inner profile of the shade.
- * By default it creates a central E27 hole (20 mm radius) and can optionally add
- * a rounded cable slot to the rim (for bottom cap cable routing).
+ * Build a cap that conforms to the inner ripple profile at a given height,
+ * then extrudes along +Z by `capH`. Creates a central E27 hole (default 20 mm
+ * radius) and can optionally add a radial cable slot from the hole edge to the
+ * rim at a given angle.
  *
- * @param {object} p        params
- * @param {number} vFrac    0 for bottom, 1 for top
- * @param {number} capH     cap thickness in mm
- * @param {number} holeR    central hole radius (default 20 mm for E27)
- * @param {object} options  { bottomSlot?: boolean, slotWidth?: number, slotAngle?: number }
+ * @param {object} p         current params
+ * @param {number} vFrac     0 for bottom, 1 for top
+ * @param {number} capH      cap thickness in mm
+ * @param {number} holeR     central hole radius in mm (default 20 for E27)
+ * @param {object} options   { bottomSlot?: boolean, slotWidth?: number, slotAngle?: number }
+ *                            - bottomSlot: add slot only when vFrac===0 (bottom cap)
+ *                            - slotWidth:  slot width in mm (default 8)
+ *                            - slotAngle:  slot direction in radians; 0=+X, π/2=+Y
+ * @returns {THREE.ExtrudeGeometry}
  */
 export function buildConformingCap(
   p,
@@ -22,46 +28,51 @@ export function buildConformingCap(
   const radialSeg = p.res === "low" ? 96 : (p.res === "med" ? 180 : 300);
   const EPS = 1e-4;
 
-  // Outer boundary: inner wall profile at this height
+  // ---- Outer boundary (follow inner wall at this height) ----
   const shape = new THREE.Shape();
   for (let i = 0; i <= radialSeg; i++) {
     const u = (i % radialSeg) / radialSeg;
     const ang = u * 2 * Math.PI + EPS;
-    const r = innerRadiusAt(p, vFrac, ang) * 0.995; // tiny shrink
+    const r = innerRadiusAt(p, vFrac, ang) * 0.995; // slight shrink to avoid z-fighting
     const x = r * Math.cos(ang), y = r * Math.sin(ang);
     if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
   }
   shape.closePath();
 
-  // Central E27 hole
+  // ---- Central E27 hole (circle) ----
   addCircleHole(shape, holeR, 96);
 
-  // Optional cable slot (for bottom cap when standing)
+  // ---- Optional cable slot (bottom cap only) ----
   if (options.bottomSlot && vFrac === 0) {
-    const slotWidth = Math.max(6, options.slotWidth || 8);     // ~6–10 mm wide
-    const slotAngle =
-  (options && typeof options.slotAngle === "number") ? options.slotAngle : 0;
-    // Determine available outer radius at this angle
+    // Respect 0/negative angles (don’t use || for defaults)
+    const slotAngle = (typeof options.slotAngle === "number") ? options.slotAngle : 0;
+    const slotWidth = Math.max(6, options.slotWidth || 8);
+
+    // Start exactly at hole edge; end at rim at that angle
+    const rInner = holeR;
     const rOuter = innerRadiusAt(p, vFrac, slotAngle) * 0.995;
-    // Start just outside the E27 hole, end slightly before the rim
-    const startR = holeR + slotWidth * 0.6;
-    const endR   = rOuter - 2; // leave 2 mm margin
-    if (endR > startR + 2) {
-      addRoundedSlot(shape, startR, endR, slotWidth, slotAngle, 48);
+
+    if (rOuter > rInner + 2) {
+      addRadialSlot(shape, rInner, rOuter, slotWidth, slotAngle, 48);
     }
   }
 
+  // ---- Extrude along +Z to make the cap solid ----
   const extrude = new THREE.ExtrudeGeometry(shape, {
     depth: capH,
     bevelEnabled: false,
     curveSegments: radialSeg
   });
+
+  // Bottom cap: z ∈ [0, capH]
+  // Top cap:    z ∈ [height-capH, height]
   const zOffset = (vFrac === 1) ? (p.height - capH) : 0;
   extrude.translate(0, 0, zOffset);
+
   return extrude;
 }
 
-// --- helpers ---
+/* Helpers --------------------------------------------------- */
 
 function addCircleHole(shape, radius, seg = 64) {
   const h = new THREE.Path();
@@ -76,31 +87,35 @@ function addCircleHole(shape, radius, seg = 64) {
 }
 
 /**
- * Adds a rounded "capsule" slot starting at radius r0 and ending at r1,
- * oriented by angle `theta` from the center.
+ * Adds a straight radial "pill" slot from rInner (at the E27 edge) to rOuter
+ * (at the inner wall), centered on angle `theta`, with width `width`.
+ * Orientation:
+ *   0 → +X,  π/2 → +Y,  π → −X,  3π/2 → −Y
  */
-function addRoundedSlot(shape, r0, r1, width, theta = 0, seg = 48) {
+function addRadialSlot(shape, rInner, rOuter, width, theta = 0, seg = 48) {
   const halfW = width / 2;
-  // Local axis along the slot direction
+
+  // Radial direction (u) and its perpendicular (v) for width
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  // Perpendicular for width
   const vx = -uy, vy = ux;
 
-  const p0x = ux * r0, p0y = uy * r0; // inner end center
-  const p1x = ux * r1, p1y = uy * r1; // outer end center
+  // Centers of the two semicircular ends
+  const p0x = ux * rInner, p0y = uy * rInner; // inner end (at hole)
+  const p1x = ux * rOuter, p1y = uy * rOuter; // outer end (at rim)
 
-  // Build a path approximating a pill/rounded-rectangle
   const slot = new THREE.Path();
 
-  // Start at inner-right
+  // Right edge from inner to outer
   slot.moveTo(p0x + vx * halfW, p0y + vy * halfW);
-  // Straight edge to outer-right
   slot.lineTo(p1x + vx * halfW, p1y + vy * halfW);
-  // Outer semicircle
+
+  // Rounded cap at outer end (clockwise from right edge to left edge)
   arcPoints(slot, p1x, p1y, halfW, theta - Math.PI / 2, theta + Math.PI / 2, seg);
-  // Back along left edge
+
+  // Left edge back to inner
   slot.lineTo(p0x - vx * halfW, p0y - vy * halfW);
-  // Inner semicircle
+
+  // Rounded cap at inner end (close back to start)
   arcPoints(slot, p0x, p0y, halfW, theta + Math.PI / 2, theta - Math.PI / 2, seg);
 
   slot.closePath();
