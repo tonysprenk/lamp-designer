@@ -29,7 +29,7 @@
 
   <!-- Version (bump this each deploy) -->
   <script>
-    window.APP_VERSION = "0.6.0";
+    window.APP_VERSION = "0.6.1";
   </script>
 </head>
 <body>
@@ -102,9 +102,9 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
 
 const camera = new THREE.PerspectiveCamera(45, (window.innerWidth - 360) / window.innerHeight, 0.1, 5000);
-camera.position.set(420, -420, 240); // oblique view that sees Z-up height
+camera.position.set(420, -420, 240); // oblique view
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0, 115); // look roughly mid-shade
+controls.target.set(0, 0, 115);
 controls.enableDamping = true;
 controls.update();
 
@@ -114,9 +114,9 @@ const dir = new THREE.DirectionalLight(0xffffff, 1.0);
 dir.position.set(300, -300, 480);
 scene.add(dir);
 
-// grid on the XY plane at z=0 (Z-up ground)
+// grid on XY at z=0 (Z-up ground)
 const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
-grid.rotation.x = Math.PI / 2; // move from XZ to XY
+grid.rotation.x = Math.PI / 2;
 grid.position.z = 0;
 scene.add(grid);
 
@@ -174,6 +174,25 @@ function baseRadius(t, R0, R1) {
   return THREE.MathUtils.lerp(R0, R1, t) * belly;
 }
 
+// Inner radius at a given height fraction v and angle ang (radians)
+function innerRadiusAt(v, ang) {
+  var R0 = params.rbase;
+  var R1 = R0 * params.topscale;
+  var br = baseRadius(v, R0, R1);
+  var twist = THREE.MathUtils.degToRad(params.twist);
+  var phase = twist * v;
+  var amp = params.amp;
+  var rOuter, rInner;
+
+  if (params.ripdir === "vertical") {
+    rOuter = br * (1 + amp * Math.sin(params.waves * ang + phase));
+  } else {
+    rOuter = br * (1 + amp * Math.sin((params.waves * 2 * Math.PI) * v + 1.5 * ang));
+  }
+  rInner = Math.max(1, rOuter - params.wallFixed); // vase wall ~0.7mm
+  return rInner;
+}
+
 // Seam-safe tube (no duplicate seam column); height along Z from 0..H
 function buildSurface() {
   var radialSeg = (params.res === "low") ? 96 : ((params.res === "med") ? 180 : 300);
@@ -227,6 +246,42 @@ function buildSurface() {
   return smooth;
 }
 
+// Conforming cap: extruded shape that matches the inner ripple at v=0 (bottom) or v=1 (top)
+function buildCapAt(vFrac, holeRadius, capH) {
+  var radialSeg = (params.res === "low") ? 96 : ((params.res === "med") ? 180 : 300);
+  var EPS = 1e-4;
+
+  // Outer boundary: inner wall profile at this height
+  var shape = new THREE.Shape();
+  for (var i = 0; i <= radialSeg; i++) {
+    var u = (i % radialSeg) / radialSeg;
+    var ang = u * Math.PI * 2 + EPS;
+    var r = innerRadiusAt(vFrac, ang) * 0.995; // tiny shrink to avoid z-fighting
+    var x = r * Math.cos(ang);
+    var y = r * Math.sin(ang);
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  shape.closePath();
+
+  // Inner hole for E27 fitting
+  var hole = new THREE.Path();
+  var holeSeg = 96;
+  for (var j = 0; j <= holeSeg; j++) {
+    var a2 = (j / holeSeg) * Math.PI * 2;
+    var xh = holeRadius * Math.cos(a2);
+    var yh = holeRadius * Math.sin(a2);
+    if (j === 0) hole.moveTo(xh, yh); else hole.lineTo(xh, yh);
+  }
+  hole.closePath();
+  shape.holes.push(hole);
+
+  var extrude = new THREE.ExtrudeGeometry(shape, { depth: capH, bevelEnabled: false, curveSegments: radialSeg });
+  // Position along Z: bottom from 0..capH, top from (H - capH)..H
+  var zOffset = (vFrac === 1) ? (params.height - capH) : 0;
+  extrude.translate(0, 0, zOffset);
+  return extrude;
+}
+
 function rebuild() {
   // Clamp to Bambu X1C volume (256³) with margin
   var safety = 6;
@@ -252,53 +307,29 @@ function rebuild() {
 
   makeMaterial();
 
-  // Lamp body (Z-up from z=0..H)
+  // Lamp body (Z-up 0..H)
   var outerGeo = buildSurface();
   var outerMesh = new THREE.Mesh(outerGeo, materialOuter);
   group.add(outerMesh);
 
-  // Opening guides (preview only) — cylinders along Z, positioned at base/top
-  var holeMat = new THREE.MeshStandardMaterial({ color: 0x0b0e12, metalness: 0.0, roughness: 1.0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-  var tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole / 2, params.topHole / 2, Math.max(40, params.height * 0.8), 96), holeMat);
-  tCyl.rotation.x = Math.PI / 2; tCyl.position.z = params.height - 0.01;
-  var bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole / 2, params.bottomHole / 2, Math.max(40, params.height * 0.8), 96), holeMat);
-  bCyl.rotation.x = Math.PI / 2; bCyl.position.z = 0.01;
-  group.add(tCyl, bCyl);
-
-  // Cap(s) for E27 clamp
-  function brAt(v){ return baseRadius(v, params.rbase, params.rbase*params.topscale); }
-  var brBottom = brAt(0);
-  var brTop    = brAt(1);
-  var capH = 5;        // mm plate thickness
-  var capShrink = 0.98; // slightly inside wall
-
+  // Conforming cap(s)
+  var capH = 5; // mm
   if (params.mount === "standing") {
-    // Bottom cap at z=0..capH
-    var capOuterR = brBottom * capShrink;
-    var cap = new THREE.Mesh(new THREE.CylinderGeometry(capOuterR, capOuterR, capH, 96), materialOuter);
-    cap.position.z = capH/2;
-    // Center hole for E27 fitting
-    var capHole = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, capH+0.2, 64), new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
-    cap.add(capHole);
-    group.add(cap);
+    var capBottom = new THREE.Mesh(buildCapAt(0, params.bottomHole/2, capH), materialOuter);
+    group.add(capBottom);
   } else {
-    // Hanging cable preview
+    // Hanging cable
     var cableMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9, metalness: 0.0 });
     var cableLen = 300;
     var cable = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, cableLen, 24), cableMat);
     cable.position.z = params.height + cableLen/2;
     group.add(cable);
 
-    // Top cap at z=H-capH..H
-    var capOuterRT = brTop * capShrink;
-    var capT = new THREE.Mesh(new THREE.CylinderGeometry(capOuterRT, capOuterRT, capH, 96), materialOuter);
-    capT.position.z = params.height - capH/2;
-    var capHoleT = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, capH+0.2, 64), new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
-    capT.add(capHoleT);
-    group.add(capT);
+    var capTop = new THREE.Mesh(buildCapAt(1, params.topHole/2, capH), materialOuter);
+    group.add(capTop);
   }
 
-  // Ensure group sits on z=0 (no extra rotation)
+  // Ensure group sits on z=0 (no rotation tricks)
   group.position.z = 0;
 
   // Focus camera target to the lamp's mid-height
