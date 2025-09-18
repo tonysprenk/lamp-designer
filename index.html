@@ -17,7 +17,7 @@
     .note { font-size:11px; color:#8aa4c8; margin-top:10px; }
   </style>
 
-  <!-- Static import map (no comments; Safari-friendly) -->
+  <!-- Static import map (Safari-friendly) -->
   <script type="importmap">
   {
     "imports": {
@@ -29,7 +29,7 @@
 
   <!-- Version (bump this each deploy) -->
   <script>
-    window.APP_VERSION = "0.4.2";
+    window.APP_VERSION = "0.5.0";
   </script>
 </head>
 <body>
@@ -51,6 +51,13 @@
       <select id="ripdir">
         <option value="vertical" selected>Vertical folds (around)</option>
         <option value="horizontal">Horizontal rings (stacked)</option>
+      </select>
+    </div>
+
+    <div class="row"><label><span>Mounting</span></label>
+      <select id="mount">
+        <option value="standing" selected>Standing (legs + bottom clamp)</option>
+        <option value="hanging">Hanging (cable + top clamp)</option>
       </select>
     </div>
 
@@ -125,17 +132,14 @@ const params = {
   ripdir: "vertical",
   finish: "opaque_white",
   res: "med",
-  wallFixed: 0.7
+  wallFixed: 0.7,
+  mount: "standing"
 };
 
 function setVersion() {
   var vEl = document.getElementById('version');
-  if (vEl && window.APP_VERSION) {
-    vEl.textContent = "v" + window.APP_VERSION;
-  }
-  if (window.APP_VERSION) {
-    console.log("Organic Lamp Designer v" + window.APP_VERSION);
-  }
+  if (vEl && window.APP_VERSION) vEl.textContent = "v" + window.APP_VERSION;
+  if (window.APP_VERSION) console.log("Organic Lamp Designer v" + window.APP_VERSION);
 }
 
 function makeMaterial() {
@@ -159,8 +163,7 @@ function makeMaterial() {
       opts = { color: 0xf5f7fb, metalness: 0.0 };
       break;
   }
-  var finalOpts = Object.assign({}, glossy, opts);
-  materialOuter = new THREE.MeshPhysicalMaterial(finalOpts);
+  materialOuter = new THREE.MeshPhysicalMaterial(Object.assign({}, glossy, opts));
 }
 
 function baseRadius(t, R0, R1) {
@@ -246,17 +249,78 @@ function rebuild() {
 
   makeMaterial();
 
+  // Lamp body
   var outerGeo = buildSurface();
   var outerMesh = new THREE.Mesh(outerGeo, materialOuter);
   group.add(outerMesh);
 
-  // Visual opening guides
+  // Opening guides (preview only)
   var holeMat = new THREE.MeshStandardMaterial({ color: 0x0b0e12, metalness: 0.0, roughness: 1.0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   var tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole / 2, params.topHole / 2, params.height * 2, 96), holeMat);
   tCyl.rotation.x = Math.PI / 2; tCyl.position.z = params.height - 0.01;
   var bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole / 2, params.bottomHole / 2, params.height * 2, 96), holeMat);
   bCyl.rotation.x = Math.PI / 2; bCyl.position.z = -params.height;
   group.add(tCyl, bCyl);
+
+  // Mount-specific parts
+  if (params.mount === "standing") {
+    // Legs (3x curved)
+    var legMat = new THREE.MeshPhysicalMaterial({ color: 0x202a36, roughness: 0.25, metalness: 0.2, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.0 });
+    var legDrop = Math.max(30, Math.min(60, params.rbase * 0.5));
+    var legRad  = Math.max(2.2, params.rbase * 0.02);
+    for (var li = 0; li < 3; li++) {
+      var a = (li / 3) * Math.PI * 2;
+      var bx = (params.rbase * 0.85) * Math.cos(a);
+      var by = (params.rbase * 0.85) * Math.sin(a);
+      var p0 = new THREE.Vector3(bx, by, 0.0);
+      var p1 = new THREE.Vector3((params.rbase * 1.05) * Math.cos(a), (params.rbase * 1.05) * Math.sin(a), -legDrop * 0.45);
+      var p2 = new THREE.Vector3((params.rbase * 1.25) * Math.cos(a), (params.rbase * 1.25) * Math.sin(a), -legDrop);
+      var curve = new THREE.QuadraticBezierCurve3(p0, p1, p2);
+      var legGeo = new THREE.TubeGeometry(curve, 24, legRad, 8, false);
+      group.add(new THREE.Mesh(legGeo, legMat));
+    }
+
+    // Bottom E27 clamp (preview ring)
+    var clampOD = Math.max(params.bottomHole + 8, 46);
+    var clampH  = 6;
+    var clampMat = new THREE.MeshPhysicalMaterial({ color: 0xcfd3d8, metalness: 1.0, roughness: 0.2, envMapIntensity: 1.1, clearcoat: 0.4 });
+    var clampOuter = new THREE.CylinderGeometry(clampOD/2, clampOD/2, clampH, 64);
+    var clampInner = new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, clampH+0.2, 64);
+    var clamp = new THREE.Mesh(clampOuter, clampMat);
+    var clampHole = new THREE.Mesh(clampInner, new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
+    clamp.position.z = -clampH/2 + 0.5;
+    clamp.add(clampHole);
+    group.add(clamp);
+
+  } else {
+    // Hanging cable
+    var cableMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9, metalness: 0.0 });
+    var cableLen = 300;
+    var cableGeo = new THREE.CylinderGeometry(2, 2, cableLen, 24);
+    var cable = new THREE.Mesh(cableGeo, cableMat);
+    cable.position.z = params.height + cableLen/2;
+    group.add(cable);
+
+    // Top E27 clamp (preview ring)
+    var clampODT = Math.max(params.topHole + 8, 46);
+    var clampHT  = 6;
+    var clampMatT = new THREE.MeshPhysicalMaterial({ color: 0xcfd3d8, metalness: 1.0, roughness: 0.2, envMapIntensity: 1.1, clearcoat: 0.4 });
+    var clampOuterT = new THREE.CylinderGeometry(clampODT/2, clampODT/2, clampHT, 64);
+    var clampInnerT = new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, clampHT+0.2, 64);
+    var clampT = new THREE.Mesh(clampOuterT, clampMatT);
+    var clampHoleT = new THREE.Mesh(clampInnerT, new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
+    clampT.position.z = params.height - clampHT/2 - 0.5;
+    clampT.add(clampHoleT);
+    group.add(clampT);
+  }
+
+  // Rotate whole assembly so Z-up model stands vertical in Y-up world
+  group.rotation.x = Math.PI / 2;
+  // Base at ground
+  group.position.y = 0;
+  // Re-focus camera target to mid-height after rotation
+  controls.target.set(0, params.height * 0.5, 0);
+  controls.update();
 
   scene.add(group);
 }
@@ -285,6 +349,7 @@ bindRange("bottomHole", "bottomHole");
 document.getElementById("ripdir").addEventListener("change", function(e){ params.ripdir = e.target.value; rebuild(); });
 document.getElementById("finish").addEventListener("change", function(e){ params.finish = e.target.value; rebuild(); });
 document.getElementById("res").addEventListener("change", function(e){ params.res = e.target.value; rebuild(); });
+document.getElementById("mount").addEventListener("change", function(e){ params.mount = e.target.value; rebuild(); });
 
 window.addEventListener("resize", function(){
   renderer.setSize(window.innerWidth - 360, window.innerHeight);
