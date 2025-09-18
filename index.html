@@ -29,7 +29,7 @@
 
   <!-- Version (bump this each deploy) -->
   <script>
-    window.APP_VERSION = "0.5.0";
+    window.APP_VERSION = "0.6.0";
   </script>
 </head>
 <body>
@@ -56,8 +56,8 @@
 
     <div class="row"><label><span>Mounting</span></label>
       <select id="mount">
-        <option value="standing" selected>Standing (legs + bottom clamp)</option>
-        <option value="hanging">Hanging (cable + top clamp)</option>
+        <option value="standing" selected>Standing (bottom cap + E27 clamp)</option>
+        <option value="hanging">Hanging (top cap + cable + E27 clamp)</option>
       </select>
     </div>
 
@@ -102,19 +102,22 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
 
 const camera = new THREE.PerspectiveCamera(45, (window.innerWidth - 360) / window.innerHeight, 0.1, 5000);
-camera.position.set(0, -520, 260);
+camera.position.set(420, -420, 240); // oblique view that sees Z-up height
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0, 140);
+controls.target.set(0, 0, 115); // look roughly mid-shade
 controls.enableDamping = true;
 controls.update();
 
+// lights
 scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-dir.position.set(200, 220, 360);
+dir.position.set(300, -300, 480);
 scene.add(dir);
 
+// grid on the XY plane at z=0 (Z-up ground)
 const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
-grid.position.z = -0.1;
+grid.rotation.x = Math.PI / 2; // move from XZ to XY
+grid.position.z = 0;
 scene.add(grid);
 
 let group;
@@ -171,7 +174,7 @@ function baseRadius(t, R0, R1) {
   return THREE.MathUtils.lerp(R0, R1, t) * belly;
 }
 
-// Seam-safe tube (no duplicate seam column)
+// Seam-safe tube (no duplicate seam column); height along Z from 0..H
 function buildSurface() {
   var radialSeg = (params.res === "low") ? 96 : ((params.res === "med") ? 180 : 300);
   var heightSeg = (params.res === "low") ? 120 : ((params.res === "med") ? 220 : 360);
@@ -188,7 +191,7 @@ function buildSurface() {
   var p = 0;
   for (var j = 0; j <= heightSeg; j++) {
     var v = j / heightSeg;
-    var z = H * v;
+    var z = H * v; // 0..H
     var phase = twist * v;
     for (var i = 0; i < radialSeg; i++) {
       var u = i / radialSeg;
@@ -249,77 +252,57 @@ function rebuild() {
 
   makeMaterial();
 
-  // Lamp body
+  // Lamp body (Z-up from z=0..H)
   var outerGeo = buildSurface();
   var outerMesh = new THREE.Mesh(outerGeo, materialOuter);
   group.add(outerMesh);
 
-  // Opening guides (preview only)
+  // Opening guides (preview only) — cylinders along Z, positioned at base/top
   var holeMat = new THREE.MeshStandardMaterial({ color: 0x0b0e12, metalness: 0.0, roughness: 1.0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-  var tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole / 2, params.topHole / 2, params.height * 2, 96), holeMat);
+  var tCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole / 2, params.topHole / 2, Math.max(40, params.height * 0.8), 96), holeMat);
   tCyl.rotation.x = Math.PI / 2; tCyl.position.z = params.height - 0.01;
-  var bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole / 2, params.bottomHole / 2, params.height * 2, 96), holeMat);
-  bCyl.rotation.x = Math.PI / 2; bCyl.position.z = -params.height;
+  var bCyl = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole / 2, params.bottomHole / 2, Math.max(40, params.height * 0.8), 96), holeMat);
+  bCyl.rotation.x = Math.PI / 2; bCyl.position.z = 0.01;
   group.add(tCyl, bCyl);
 
-  // Mount-specific parts
+  // Cap(s) for E27 clamp
+  function brAt(v){ return baseRadius(v, params.rbase, params.rbase*params.topscale); }
+  var brBottom = brAt(0);
+  var brTop    = brAt(1);
+  var capH = 5;        // mm plate thickness
+  var capShrink = 0.98; // slightly inside wall
+
   if (params.mount === "standing") {
-    // Legs (3x curved)
-    var legMat = new THREE.MeshPhysicalMaterial({ color: 0x202a36, roughness: 0.25, metalness: 0.2, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.0 });
-    var legDrop = Math.max(30, Math.min(60, params.rbase * 0.5));
-    var legRad  = Math.max(2.2, params.rbase * 0.02);
-    for (var li = 0; li < 3; li++) {
-      var a = (li / 3) * Math.PI * 2;
-      var bx = (params.rbase * 0.85) * Math.cos(a);
-      var by = (params.rbase * 0.85) * Math.sin(a);
-      var p0 = new THREE.Vector3(bx, by, 0.0);
-      var p1 = new THREE.Vector3((params.rbase * 1.05) * Math.cos(a), (params.rbase * 1.05) * Math.sin(a), -legDrop * 0.45);
-      var p2 = new THREE.Vector3((params.rbase * 1.25) * Math.cos(a), (params.rbase * 1.25) * Math.sin(a), -legDrop);
-      var curve = new THREE.QuadraticBezierCurve3(p0, p1, p2);
-      var legGeo = new THREE.TubeGeometry(curve, 24, legRad, 8, false);
-      group.add(new THREE.Mesh(legGeo, legMat));
-    }
-
-    // Bottom E27 clamp (preview ring)
-    var clampOD = Math.max(params.bottomHole + 8, 46);
-    var clampH  = 6;
-    var clampMat = new THREE.MeshPhysicalMaterial({ color: 0xcfd3d8, metalness: 1.0, roughness: 0.2, envMapIntensity: 1.1, clearcoat: 0.4 });
-    var clampOuter = new THREE.CylinderGeometry(clampOD/2, clampOD/2, clampH, 64);
-    var clampInner = new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, clampH+0.2, 64);
-    var clamp = new THREE.Mesh(clampOuter, clampMat);
-    var clampHole = new THREE.Mesh(clampInner, new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
-    clamp.position.z = -clampH/2 + 0.5;
-    clamp.add(clampHole);
-    group.add(clamp);
-
+    // Bottom cap at z=0..capH
+    var capOuterR = brBottom * capShrink;
+    var cap = new THREE.Mesh(new THREE.CylinderGeometry(capOuterR, capOuterR, capH, 96), materialOuter);
+    cap.position.z = capH/2;
+    // Center hole for E27 fitting
+    var capHole = new THREE.Mesh(new THREE.CylinderGeometry(params.bottomHole/2, params.bottomHole/2, capH+0.2, 64), new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
+    cap.add(capHole);
+    group.add(cap);
   } else {
-    // Hanging cable
+    // Hanging cable preview
     var cableMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9, metalness: 0.0 });
     var cableLen = 300;
-    var cableGeo = new THREE.CylinderGeometry(2, 2, cableLen, 24);
-    var cable = new THREE.Mesh(cableGeo, cableMat);
+    var cable = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, cableLen, 24), cableMat);
     cable.position.z = params.height + cableLen/2;
     group.add(cable);
 
-    // Top E27 clamp (preview ring)
-    var clampODT = Math.max(params.topHole + 8, 46);
-    var clampHT  = 6;
-    var clampMatT = new THREE.MeshPhysicalMaterial({ color: 0xcfd3d8, metalness: 1.0, roughness: 0.2, envMapIntensity: 1.1, clearcoat: 0.4 });
-    var clampOuterT = new THREE.CylinderGeometry(clampODT/2, clampODT/2, clampHT, 64);
-    var clampInnerT = new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, clampHT+0.2, 64);
-    var clampT = new THREE.Mesh(clampOuterT, clampMatT);
-    var clampHoleT = new THREE.Mesh(clampInnerT, new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
-    clampT.position.z = params.height - clampHT/2 - 0.5;
-    clampT.add(clampHoleT);
-    group.add(clampT);
+    // Top cap at z=H-capH..H
+    var capOuterRT = brTop * capShrink;
+    var capT = new THREE.Mesh(new THREE.CylinderGeometry(capOuterRT, capOuterRT, capH, 96), materialOuter);
+    capT.position.z = params.height - capH/2;
+    var capHoleT = new THREE.Mesh(new THREE.CylinderGeometry(params.topHole/2, params.topHole/2, capH+0.2, 64), new THREE.MeshStandardMaterial({ color: 0x0b0e12 }));
+    capT.add(capHoleT);
+    group.add(capT);
   }
 
-  // Rotate whole assembly so Z-up model stands vertical in Y-up world
-  group.rotation.x = Math.PI / 2;
-  // Base at ground
-  group.position.y = 0;
-  // Re-focus camera target to mid-height after rotation
-  controls.target.set(0, params.height * 0.5, 0);
+  // Ensure group sits on z=0 (no extra rotation)
+  group.position.z = 0;
+
+  // Focus camera target to the lamp's mid-height
+  controls.target.set(0, 0, params.height * 0.5);
   controls.update();
 
   scene.add(group);
