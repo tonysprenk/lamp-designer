@@ -8,7 +8,7 @@ export const params = {
   ripdir: "vertical",
   finish: "opaque_white",
   res: "med",
-  wallFixed: 0.7,
+  wallFixed: 0.7,  // used for export/manufacture
   mount: "standing"
 };
 
