@@ -39,7 +39,8 @@ export function buildConformingCap(
   // Optional cable slot (for bottom cap when standing)
   if (options.bottomSlot && vFrac === 0) {
     const slotWidth = Math.max(6, options.slotWidth || 8);     // ~6–10 mm wide
-    const slotAngle = options.slotAngle || 0;                  // direction in radians
+    const slotAngle =
+  (options && typeof options.slotAngle === "number") ? options.slotAngle : 0;
     // Determine available outer radius at this angle
     const rOuter = innerRadiusAt(p, vFrac, slotAngle) * 0.995;
     // Start just outside the E27 hole, end slightly before the rim
