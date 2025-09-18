@@ -90,7 +90,7 @@ const capH = 5;
 if (params.mount === "standing") {
   // Bottom cap with side cable slot (default width 8 mm, direction 0 rad = +X)
   const capBottom = new THREE.Mesh(
-    buildConformingCap(params, 0, capH, /*holeR=*/20, { bottomSlot: true, slotWidth: 8, slotAngle: Math.PI / 2 }),
+    buildConformingCap(params, 0, capH, /*holeR=*/20, { bottomSlot: true, slotWidth: 8, slotAngle: Math.PI }),
     materialOuter
   );
   group.add(capBottom);
