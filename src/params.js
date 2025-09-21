@@ -16,7 +16,7 @@ export const params = {
   slotWidth: 8,         // mm
   slotLength: 0,        // 0 = auto to rim
   slotOvershoot: 1.0,   // mm beyond rim
-  slotOffset: 0.0 // mm from hole edge (+ outward)
+  slotOffset: 0.0, // mm from hole edge (+ outward)
   slotRollDeg: 0,
   slotDebug: false
 };
