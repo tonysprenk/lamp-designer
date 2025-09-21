@@ -152,7 +152,7 @@ bindRange("slotLength", "slotLength", params, rebuild);
 bindRange("slotOvershoot", "slotOvershoot", params, rebuild, v => Number(v).toFixed(1));
 bindRange("slotOffset", "slotOffset", params, rebuild, v => Number(v).toFixed(1));
 bindCheck("slotDebug", "slotDebug", params, rebuild);
-
+bindRange("slotRoll", "slotRollDeg", params, rebuild);
 // Resize
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth - 360, window.innerHeight);
