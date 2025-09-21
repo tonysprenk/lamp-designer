@@ -68,7 +68,10 @@ function rebuild() {
   setL("waves", params.waves);
   setL("amp", Number(params.amp).toFixed(2));
   setL("twist", params.twist);
+
+  // slot labels (if present)
   setL("slotAngle", params.slotAngleDeg);
+  setL("slotRoll", params.slotRollDeg);
   setL("slotWidth", Number(params.slotWidth).toFixed(1));
   setL("slotLength", params.slotLength);
   setL("slotOvershoot", Number(params.slotOvershoot).toFixed(1));
@@ -93,6 +96,7 @@ function rebuild() {
       bottomSlot: true,
       slotWidth: params.slotWidth,
       slotAngle: (params.slotAngleDeg * Math.PI) / 180,
+      slotRoll: (params.slotRollDeg * Math.PI) / 180,
       slotLength: params.slotLength || 0, // 0 => auto to rim
       slotOvershoot: params.slotOvershoot,
       slotOffset: params.slotOffset
@@ -120,7 +124,10 @@ function rebuild() {
     cable.position.z = params.height + 150;
     group.add(cable);
 
-    const capTop = new THREE.Mesh(buildConformingCap(params, 1, capH, 20, {}), materialOuter);
+    const capTop = new THREE.Mesh(
+      buildConformingCap(params, 1, capH, 20, {}),
+      materialOuter
+    );
     group.add(capTop);
 
     if (debugGroup) { group.remove(debugGroup); debugGroup = null; }
@@ -145,14 +152,15 @@ bindSelect("finish", "finish", params, rebuild);
 bindSelect("res", "res", params, rebuild);
 bindSelect("mount", "mount", params, rebuild);
 
-// NEW: slot controls
+// Slot controls
 bindRange("slotAngle", "slotAngleDeg", params, rebuild);
+bindRange("slotRoll", "slotRollDeg", params, rebuild);
 bindRange("slotWidth", "slotWidth", params, rebuild, v => Number(v).toFixed(1));
 bindRange("slotLength", "slotLength", params, rebuild);
 bindRange("slotOvershoot", "slotOvershoot", params, rebuild, v => Number(v).toFixed(1));
 bindRange("slotOffset", "slotOffset", params, rebuild, v => Number(v).toFixed(1));
 bindCheck("slotDebug", "slotDebug", params, rebuild);
-bindRange("slotRoll", "slotRollDeg", params, rebuild);
+
 // Resize
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth - 360, window.innerHeight);
