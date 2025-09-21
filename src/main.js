@@ -118,7 +118,7 @@ function rebuild() {
 }
 
 // Bindings
-import { bindRange, bindSelect, bindCheck } from "@app/ui.js";
+
 bindRange("height", "height", params, rebuild);
 bindRange("rbase", "rbase", params, rebuild);
 bindRange("topscale", "topscale", params, rebuild, v => Number(v).toFixed(2));
