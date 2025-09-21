@@ -83,7 +83,7 @@ function buildKeyholePath(p, vFrac, holeR, options) {
 
   // Centerline (u) and rolled width axis (v) in the XY plane
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI / 2 + roll;
+  const vAng = theta - Math.PI / 2 + roll;
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
   // Inner radius where mouth touches the circle (can be offset slightly)
@@ -156,7 +156,7 @@ export function buildSlotDebug(p, vFrac, holeR, options = {}) {
   const offset   = options.slotOffset   ?? 0.0;
 
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI / 2 + roll;
+  const vAng = theta - Math.PI / 2 + roll;
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
   const rInner = Math.max(0.1, holeR + offset);
