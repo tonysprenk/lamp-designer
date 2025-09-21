@@ -6,8 +6,8 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { params, clampForBambu } from "@app/params.js";
 import { makeMaterial } from "@app/materials.js";
 import { buildSurface } from "@app/geometry.js";
-import { buildConformingCap } from "@app/caps.js";
-import { bindRange, bindSelect } from "@app/ui.js";
+import { buildConformingCap, buildSlotDebug } from "@app/caps.js";
+import { bindRange, bindSelect, bindCheck } from "@app/ui.js";
 
 // Version badge
 const ver = document.getElementById("version");
@@ -15,7 +15,7 @@ if (ver && window.APP_VERSION) ver.textContent = "v" + window.APP_VERSION;
 if (window.APP_VERSION) console.log("Organic Lamp Designer v" + window.APP_VERSION);
 
 // Renderer & scene
-const canvas = document.getElementById('canvas');
+const canvas = document.getElementById("canvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth - 360, window.innerHeight);
@@ -45,6 +45,7 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
 dir.position.set(300, -300, 480);
 scene.add(dir);
+
 const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
 grid.rotation.x = Math.PI / 2;
 grid.position.z = 0;
@@ -52,12 +53,11 @@ scene.add(grid);
 
 let group;
 let materialOuter;
+let debugGroup = null;
 
 function rebuild() {
-  // Keep within Bambu X1C volume
   clampForBambu(params);
 
-  // Labels (null-safe)
   const setL = (id, val) => {
     const el = document.getElementById("val_" + id);
     if (el) el.textContent = String(val);
@@ -68,65 +68,72 @@ function rebuild() {
   setL("waves", params.waves);
   setL("amp", Number(params.amp).toFixed(2));
   setL("twist", params.twist);
+  setL("slotAngle", params.slotAngleDeg);
+  setL("slotWidth", Number(params.slotWidth).toFixed(1));
+  setL("slotLength", params.slotLength);
+  setL("slotOvershoot", Number(params.slotOvershoot).toFixed(1));
+  setL("slotOffset", Number(params.slotOffset).toFixed(1));
 
-  // Reset group
   if (group) {
     scene.remove(group);
     group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   }
   group = new THREE.Group();
 
-  // Material
   materialOuter = makeMaterial(params.finish);
 
   // Lamp body (Z-up 0..H)
   const body = new THREE.Mesh(buildSurface(params), materialOuter);
   group.add(body);
 
-  // Conforming cap(s) with fixed E27 hole (caps.js default holeR=20mm)
-  // src/main.js (inside rebuild)
+  // Caps
+  const capH = 5;
+  if (params.mount === "standing") {
+    const opts = {
+      bottomSlot: true,
+      slotWidth: params.slotWidth,
+      slotAngle: (params.slotAngleDeg * Math.PI) / 180,
+      slotLength: params.slotLength || 0, // 0 => auto to rim
+      slotOvershoot: params.slotOvershoot,
+      slotOffset: params.slotOffset
+    };
 
+    const capBottom = new THREE.Mesh(
+      buildConformingCap(params, 0, capH, 20, opts),
+      materialOuter
+    );
+    group.add(capBottom);
 
-const capH = 5;
-// Pick a fixed direction for the slot:
-const SLOT_ANGLE = Math.PI / 2; // +Y (use 0, π/2, π, 3π/2 or any angle)
+    // Debug guides
+    if (debugGroup) { group.remove(debugGroup); debugGroup = null; }
+    if (params.slotDebug) {
+      debugGroup = buildSlotDebug(params, 0, 20, opts);
+      if (debugGroup) group.add(debugGroup);
+    }
+  } else {
+    // Hanging: rotate cable so it runs along +Z
+    const cable = new THREE.Mesh(
+      new THREE.CylinderGeometry(2, 2, 300, 24),
+      new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
+    );
+    cable.rotation.x = Math.PI / 2;
+    cable.position.z = params.height + 150;
+    group.add(cable);
 
-if (params.mount === "standing") {
-  const capBottom = new THREE.Mesh(
-    buildConformingCap(
-      params,
-      0,                 // bottom
-      capH,
-      /* holeR */ undefined,
-      { bottomSlot: true, slotWidth: 8, slotAngle: SLOT_ANGLE }
-    ),
-    materialOuter
-  );
-  group.add(capBottom);
-} else {
-  // Hanging cable (rotate to align with +Z)
-  const cable = new THREE.Mesh(
-    new THREE.CylinderGeometry(2, 2, 300, 24),
-    new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
-  );
-  cable.rotation.x = Math.PI / 2;
-  cable.position.z = params.height + 150;
-  group.add(cable);
+    const capTop = new THREE.Mesh(buildConformingCap(params, 1, capH, 20, {}), materialOuter);
+    group.add(capTop);
 
-  // Top cap (no slot)
-  const capTop = new THREE.Mesh(buildConformingCap(params, 1, capH), materialOuter);
-  group.add(capTop);
-}
+    if (debugGroup) { group.remove(debugGroup); debugGroup = null; }
+  }
 
-  // Grounding + camera target
-  group.position.z = 0; // base sits on z=0
+  group.position.z = 0;
   controls.target.set(0, 0, params.height * 0.5);
   controls.update();
 
   scene.add(group);
 }
 
-// UI wiring (null-safe helpers in ui.js)
+// UI bindings (null-safe helpers)
 bindRange("height", "height", params, rebuild);
 bindRange("rbase", "rbase", params, rebuild);
 bindRange("topscale", "topscale", params, rebuild, v => Number(v).toFixed(2));
@@ -137,6 +144,14 @@ bindSelect("ripdir", "ripdir", params, rebuild);
 bindSelect("finish", "finish", params, rebuild);
 bindSelect("res", "res", params, rebuild);
 bindSelect("mount", "mount", params, rebuild);
+
+// NEW: slot controls
+bindRange("slotAngle", "slotAngleDeg", params, rebuild);
+bindRange("slotWidth", "slotWidth", params, rebuild, v => Number(v).toFixed(1));
+bindRange("slotLength", "slotLength", params, rebuild);
+bindRange("slotOvershoot", "slotOvershoot", params, rebuild, v => Number(v).toFixed(1));
+bindRange("slotOffset", "slotOffset", params, rebuild, v => Number(v).toFixed(1));
+bindCheck("slotDebug", "slotDebug", params, rebuild);
 
 // Resize
 window.addEventListener("resize", () => {
