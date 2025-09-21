@@ -2,11 +2,25 @@
 import * as THREE from "three";
 import { innerRadiusAt } from "./geometry.js";
 
+/**
+ * Conforming cap at vFrac (0 bottom, 1 top), extruded along +Z by capH.
+ * Includes a central E27 hole (default 20 mm radius).
+ * If options.bottomSlot is true (and vFrac===0), we cut a single CW "keyhole":
+ *   - the E27 circle, minus a mouth centered at `theta`
+ *   - a straight radial corridor with a rounded tip (capsule), aligned to `theta`
+ * Slot options:
+ *   slotAngle (rad)   – centerline direction (0=+X, π/2=+Y, …)
+ *   slotRoll  (rad)   – rotate slot about its own centerline
+ *   slotWidth (mm)
+ *   slotLength (mm)   – if 0, auto to rim
+ *   slotOvershoot (mm)
+ *   slotOffset (mm)   – move the mouth slightly in/out relative to E27 edge
+ */
 export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   const radialSeg = p.res === "low" ? 96 : (p.res === "med" ? 180 : 300);
   const EPS = 1e-4;
 
-  // --- Outer boundary (conform to inner wall at height vFrac) ---
+  // ----- Outer boundary (follow inner wall at this height) -----
   const shape = new THREE.Shape();
   for (let i = 0; i <= radialSeg; i++) {
     const u = (i % radialSeg) / radialSeg;
@@ -17,14 +31,13 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   }
   shape.closePath();
 
-  // --- Holes: E27 circle + capsule slot (if bottom) ---
-  shape.holes.push(buildCircleHole(holeR, 96));
+  // ----- Hole path (single CW keyhole) -----
+  const keyhole = (options.bottomSlot && vFrac === 0)
+    ? buildKeyholePath(p, vFrac, holeR, options)
+    : buildCirclePath(holeR, 96);
+  shape.holes.push(keyhole);
 
-  if (options.bottomSlot && vFrac === 0) {
-    shape.holes.push(buildCapsuleSlot(p, vFrac, holeR, options));
-  }
-
-  // --- Extrude along +Z ---
+  // ----- Extrude along +Z -----
   const geom = new THREE.ExtrudeGeometry(shape, {
     depth: capH,
     bevelEnabled: false,
@@ -35,10 +48,10 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   return geom;
 }
 
-/* ---------------- holes ---------------- */
+/* ------------------------ paths ------------------------ */
 
-function buildCircleHole(radius, seg = 64) {
-  // Clockwise circle (hole)
+/** CW circle path for a hole. */
+function buildCirclePath(radius, seg = 64) {
   const h = new THREE.Path();
   for (let j = seg; j >= 0; j--) {
     const a = (j / seg) * Math.PI * 2;
@@ -50,86 +63,100 @@ function buildCircleHole(radius, seg = 64) {
 }
 
 /**
- * Capsule-like slot whose centerline is radial:
- * - Inner end: semicircle of radius w/2 centered at p0 (overlaps the E27 circle)
- * - Two straight edges along the radial direction
- * - Outer end: semicircle of radius w/2 centered beyond the rim (overshoot)
+ * Build a SINGLE CW keyhole:
+ *   1) Start at the right tangency point on the E27 circle (angle φR).
+ *   2) Go straight outward to the tip along the right slot edge.
+ *   3) CW around the tip semicircle to the left edge.
+ *   4) Straight back to the left tangency on the E27 circle (φL).
+ *   5) CW around the big arc of the E27 circle back to start.
  *
- * Options:
- *   slotAngle (rad)   – direction of the centerline (0=+X, π/2=+Y)
- *   slotRoll (rad)    – rotate the width direction around the centerline
- *   slotWidth (mm)
- *   slotLength (mm)   – if 0, auto to rim
- *   slotOvershoot (mm)
- *   slotOffset (mm)   – move inner center p0 relative to E27 edge (±)
+ * Uses true circle tangency, so the mouth is “rotated by 90°” relative to the
+ * radial direction (exactly what you asked in the screenshot).
  */
-function buildCapsuleSlot(p, vFrac, holeR, options) {
-  const theta = options.slotAngle ?? 0;
-  const roll  = options.slotRoll ?? 0;
+function buildKeyholePath(p, vFrac, holeR, options) {
+  const theta = options.slotAngle ?? 0;   // slot direction
+  const roll  = options.slotRoll  ?? 0;   // rotate width axis about centerline
   const width = Math.max(0.5, options.slotWidth ?? 8);
   const halfW = width * 0.5;
   const overshoot = options.slotOvershoot ?? 1.0;
-  const offset = options.slotOffset ?? 0.0;
+  const offset   = options.slotOffset   ?? 0.0;
 
-  // Centerline (u) and rolled width direction (v) in the XY plane
+  // Centerline (u) and rolled width axis (v) in the XY plane
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI/2 + roll;
+  const vAng = theta + Math.PI / 2 + roll;
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
-  // Inner & outer centers of the capsule
+  // Inner radius where mouth touches the circle (can be offset slightly)
   const rInner = Math.max(0.1, holeR + offset);
+
+  // True tangency on the *circle* (independent of roll)
+  const sinAlpha = Math.min(1 - 1e-6, halfW / rInner);
+  const alpha = Math.asin(sinAlpha);
+  const phiR = theta - alpha;  // right tangency on circle
+  const phiL = theta + alpha;  // left  tangency on circle
+  const cRx = rInner * Math.cos(phiR), cRy = rInner * Math.sin(phiR);
+  const cLx = rInner * Math.cos(phiL), cLy = rInner * Math.sin(phiL);
+
+  // Corridor length: auto to rim (projected along theta) or forced length
   const rAuto  = innerRadiusAt(p, vFrac, theta) * 0.995;
   const rOuter = (options.slotLength && options.slotLength > 0)
     ? (rInner + options.slotLength)
     : rAuto;
 
-  const p0x = ux * rInner,              p0y = uy * rInner;                 // inner center (near circle)
-  const p1x = ux * (rOuter + halfW + overshoot), p1y = uy * (rOuter + halfW + overshoot); // tip center (beyond rim)
+  // Tip center sits past rim so outer boundary trims cleanly
+  const rTip = rOuter + halfW + overshoot;
+  const tipX = ux * rTip, tipY = uy * rTip;
+  const tipRightX = tipX + vx * halfW, tipRightY = tipY + vy * halfW;
+  const tipLeftX  = tipX - vx * halfW, tipLeftY  = tipY - vy * halfW;
 
-  // Edge points (right/left) at inner and outer centers
-  const iRx = p0x + vx*halfW, iRy = p0y + vy*halfW; // inner-right
-  const iLx = p0x - vx*halfW, iLy = p0y - vy*halfW; // inner-left
-  const oRx = p1x + vx*halfW, oRy = p1y + vy*halfW; // outer-right
-  const oLx = p1x - vx*halfW, oLy = p1y - vy*halfW; // outer-left
-
-  // Build capsule loop – CLOCKWISE
-  // Start at inner-right, go out along right edge, round the tip CW,
-  // back along left edge, then round the inner end CW to close.
+  // ----- Build CW path -----
   const h = new THREE.Path();
-  h.moveTo(iRx, iRy);                    // start at inner-right
-  h.lineTo(oRx, oRy);                    // right edge (outwards)
-  arcCW(h, p1x, p1y, halfW, vAng - Math.PI, vAng, 32);  // outer semicircle (CW)
-  h.lineTo(iLx, iLy);                    // left edge (inwards)
-  arcCW(h, p0x, p0y, halfW, vAng, vAng - Math.PI, 32);  // inner semicircle (CW)
-  h.closePath();
 
+  // (1) Start at circle right tangency
+  h.moveTo(cRx, cRy);
+
+  // (2) Right straight edge from circle to tip-right
+  h.lineTo(tipRightX, tipRightY);
+
+  // (3) CW tip semicircle (right → left) around the tip center
+  // Start angle is vAng (vector from tip center to tip-right), end vAng+π (to tip-left)
+  arcCW(h, tipX, tipY, halfW, vAng, vAng + Math.PI, 32);
+
+  // (4) Left straight edge back to circle left tangency
+  h.lineTo(cLx, cLy);
+
+  // (5) CW big circle arc from left tangency back to right tangency
+  const segBig = Math.max(24, Math.floor((2 * Math.PI - 2 * alpha) / (2 * Math.PI) * 96));
+  arcCW(h, 0, 0, rInner, phiL, phiR, segBig);
+
+  h.closePath();
   return h;
 }
 
-/* ------------- arc helper (clockwise) ------------- */
+/** Append a CW (decreasing-angle) arc to path. */
 function arcCW(path, cx, cy, r, aStart, aEnd, seg = 24) {
   let a0 = aStart, a1 = aEnd;
-  if (a1 >= a0) a1 -= 2*Math.PI; // force decreasing angle = CW
+  if (a1 >= a0) a1 -= 2 * Math.PI;        // force decreasing sweep
   const step = (a1 - a0) / seg;
   for (let i = 1; i <= seg; i++) {
-    const a = a0 + step*i;
-    path.lineTo(cx + r*Math.cos(a), cy + r*Math.sin(a));
+    const a = a0 + step * i;
+    path.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
   }
 }
 
-/* ---------------- Debug: visual guides ---------------- */
+/* ------------------ Debug guides ------------------ */
 export function buildSlotDebug(p, vFrac, holeR, options = {}) {
   if (!(options.bottomSlot) || vFrac !== 0) return null;
 
   const theta = options.slotAngle ?? 0;
-  const roll  = options.slotRoll ?? 0;
+  const roll  = options.slotRoll  ?? 0;
   const width = Math.max(0.5, options.slotWidth ?? 8);
-  const halfW = width*0.5;
+  const halfW = width * 0.5;
   const overshoot = options.slotOvershoot ?? 1.0;
-  const offset = options.slotOffset ?? 0.0;
+  const offset   = options.slotOffset   ?? 0.0;
 
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI/2 + roll;
+  const vAng = theta + Math.PI / 2 + roll;
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
   const rInner = Math.max(0.1, holeR + offset);
@@ -139,19 +166,24 @@ export function buildSlotDebug(p, vFrac, holeR, options = {}) {
     : rAuto;
   const rTip   = rOuter + halfW + overshoot;
 
-  const grp = new THREE.Group();
+  const sinAlpha = Math.min(1 - 1e-6, halfW / rInner);
+  const alpha = Math.asin(sinAlpha);
+  const phiR = theta - alpha;
+  const phiL = theta + alpha;
 
-  // Centerline
+  const grp = new THREE.Group();
+  // centerline
   grp.add(line([[ux*rInner, uy*rInner, 0], [ux*rTip, uy*rTip, 0]], 0x4ec9b0));
-  // Edges
+  // edges
   grp.add(line([[ux*rInner + vx*halfW, uy*rInner + vy*halfW, 0], [ux*rTip + vx*halfW, uy*rTip + vy*halfW, 0]], 0xf78c6c));
   grp.add(line([[ux*rInner - vx*halfW, uy*rInner - vy*halfW, 0], [ux*rTip - vx*halfW, uy*rTip - vy*halfW, 0]], 0xf78c6c));
-  // Inner/outer semicircle centers
-  grp.add(circle([ux*rInner, uy*rInner, 0], halfW, 32, 0xe5c07b));
-  grp.add(circle([ux*rTip,   uy*rTip,   0], halfW, 32, 0xd19a66));
-  // Rim marker
-  grp.add(circle([ux*rAuto,  uy*rAuto,  0], 1.2, 20, 0x61afef));
-
+  // tip circle
+  grp.add(circle([ux*rTip, uy*rTip, 0], halfW, 32, 0xd19a66));
+  // rim marker (auto)
+  grp.add(circle([ux*rAuto, uy*rAuto, 0], 1.3, 24, 0x61afef));
+  // tangency points on circle
+  grp.add(circle([rInner*Math.cos(phiR), rInner*Math.sin(phiR), 0], 1.0, 12, 0xe5c07b));
+  grp.add(circle([rInner*Math.cos(phiL), rInner*Math.sin(phiL), 0], 1.0, 12, 0xe5c07b));
   return grp;
 }
 
@@ -162,9 +194,9 @@ function line(points, color) {
 }
 function circle(center, r, seg, color) {
   const pts = [];
-  for (let i=0;i<=seg;i++){
-    const a = (i/seg)*Math.PI*2;
-    pts.push(new THREE.Vector3(center[0]+r*Math.cos(a), center[1]+r*Math.sin(a), center[2]));
+  for (let i = 0; i <= seg; i++) {
+    const a = (i / seg) * Math.PI * 2;
+    pts.push(new THREE.Vector3(center[0] + r * Math.cos(a), center[1] + r * Math.sin(a), center[2]));
   }
   const geom = new THREE.BufferGeometry().setFromPoints(pts);
   const mat = new THREE.LineBasicMaterial({ color });
