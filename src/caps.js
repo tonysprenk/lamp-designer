@@ -169,8 +169,9 @@ export function buildSlotDebug(p, vFrac, holeR, options = {}) {
 
   const sinAlpha = Math.min(1 - 1e-6, halfW / rInner);
   const alpha = Math.asin(sinAlpha);
-  const phiR = theta - alpha;
-  const phiL = theta + alpha;
+  const phi0 = theta + Math.PI / 2;  // base angle = circle tangent at theta
+  const phiR = phi0 - alpha;         // right tangency (corrected)
+  const phiL = phi0 + alpha;         // left  tangency (corrected)
 
   const grp = new THREE.Group();
   // centerline
