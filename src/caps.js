@@ -92,8 +92,9 @@ function buildKeyholePath(p, vFrac, holeR, options) {
   // True tangency on the *circle* (independent of roll)
   const sinAlpha = Math.min(1 - 1e-6, halfW / rInner);
   const alpha = Math.asin(sinAlpha);
-  const phiR = theta - alpha;  // right tangency on circle
-  const phiL = theta + alpha;  // left  tangency on circle
+  const phi0 = theta + Math.PI / 2;  // base angle = circle tangent at theta
+  const phiR = phi0 - alpha;         // right tangency (corrected)
+  const phiL = phi0 + alpha;         // left  tangency (corrected)
   const cRx = rInner * Math.cos(phiR), cRy = rInner * Math.sin(phiR);
   const cLx = rInner * Math.cos(phiL), cLy = rInner * Math.sin(phiL);
 
