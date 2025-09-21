@@ -40,12 +40,11 @@ controls.target.set(0, 0, 115);
 controls.enableDamping = true;
 controls.update();
 
-// Lights + grid (XY at z=0)
+// Lights + grid
 scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
 dir.position.set(300, -300, 480);
 scene.add(dir);
-
 const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
 grid.rotation.x = Math.PI / 2;
 grid.position.z = 0;
@@ -58,18 +57,13 @@ let debugGroup = null;
 function rebuild() {
   clampForBambu(params);
 
-  const setL = (id, val) => {
-    const el = document.getElementById("val_" + id);
-    if (el) el.textContent = String(val);
-  };
+  const setL = (id, val) => { const el = document.getElementById("val_" + id); if (el) el.textContent = String(val); };
   setL("height", Math.round(params.height));
   setL("rbase", Math.round(params.rbase));
   setL("topscale", Number(params.topscale).toFixed(2));
   setL("waves", params.waves);
   setL("amp", Number(params.amp).toFixed(2));
   setL("twist", params.twist);
-
-  // slot labels (if present)
   setL("slotAngle", params.slotAngleDeg);
   setL("slotRoll", params.slotRollDeg);
   setL("slotWidth", Number(params.slotWidth).toFixed(1));
@@ -77,17 +71,13 @@ function rebuild() {
   setL("slotOvershoot", Number(params.slotOvershoot).toFixed(1));
   setL("slotOffset", Number(params.slotOffset).toFixed(1));
 
-  if (group) {
-    scene.remove(group);
-    group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-  }
+  if (group) { scene.remove(group); group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   group = new THREE.Group();
 
   materialOuter = makeMaterial(params.finish);
 
-  // Lamp body (Z-up 0..H)
-  const body = new THREE.Mesh(buildSurface(params), materialOuter);
-  group.add(body);
+  // Body
+  group.add(new THREE.Mesh(buildSurface(params), materialOuter));
 
   // Caps
   const capH = 5;
@@ -96,51 +86,39 @@ function rebuild() {
       bottomSlot: true,
       slotWidth: params.slotWidth,
       slotAngle: (params.slotAngleDeg * Math.PI) / 180,
-      slotRoll: (params.slotRollDeg * Math.PI) / 180,
-      slotLength: params.slotLength || 0, // 0 => auto to rim
+      slotRoll:  (params.slotRollDeg  * Math.PI) / 180,
+      slotLength: params.slotLength || 0,
       slotOvershoot: params.slotOvershoot,
       slotOffset: params.slotOffset
     };
+    group.add(new THREE.Mesh(buildConformingCap(params, 0, capH, 20, opts), materialOuter));
 
-    const capBottom = new THREE.Mesh(
-      buildConformingCap(params, 0, capH, 20, opts),
-      materialOuter
-    );
-    group.add(capBottom);
-
-    // Debug guides
     if (debugGroup) { group.remove(debugGroup); debugGroup = null; }
     if (params.slotDebug) {
       debugGroup = buildSlotDebug(params, 0, 20, opts);
       if (debugGroup) group.add(debugGroup);
     }
   } else {
-    // Hanging: rotate cable so it runs along +Z
     const cable = new THREE.Mesh(
       new THREE.CylinderGeometry(2, 2, 300, 24),
       new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
     );
-    cable.rotation.x = Math.PI / 2;
+    cable.rotation.x = Math.PI / 2;     // align with +Z
     cable.position.z = params.height + 150;
     group.add(cable);
 
-    const capTop = new THREE.Mesh(
-      buildConformingCap(params, 1, capH, 20, {}),
-      materialOuter
-    );
-    group.add(capTop);
-
+    group.add(new THREE.Mesh(buildConformingCap(params, 1, capH, 20, {}), materialOuter));
     if (debugGroup) { group.remove(debugGroup); debugGroup = null; }
   }
 
   group.position.z = 0;
   controls.target.set(0, 0, params.height * 0.5);
   controls.update();
-
   scene.add(group);
 }
 
-// UI bindings (null-safe helpers)
+// Bindings
+import { bindRange, bindSelect, bindCheck } from "@app/ui.js";
 bindRange("height", "height", params, rebuild);
 bindRange("rbase", "rbase", params, rebuild);
 bindRange("topscale", "topscale", params, rebuild, v => Number(v).toFixed(2));
@@ -154,25 +132,18 @@ bindSelect("mount", "mount", params, rebuild);
 
 // Slot controls
 bindRange("slotAngle", "slotAngleDeg", params, rebuild);
-bindRange("slotRoll", "slotRollDeg", params, rebuild);
+bindRange("slotRoll",  "slotRollDeg",  params, rebuild);
 bindRange("slotWidth", "slotWidth", params, rebuild, v => Number(v).toFixed(1));
-bindRange("slotLength", "slotLength", params, rebuild);
-bindRange("slotOvershoot", "slotOvershoot", params, rebuild, v => Number(v).toFixed(1));
-bindRange("slotOffset", "slotOffset", params, rebuild, v => Number(v).toFixed(1));
+bindRange("slotLength","slotLength", params, rebuild);
+bindRange("slotOvershoot","slotOvershoot", params, rebuild, v => Number(v).toFixed(1));
+bindRange("slotOffset","slotOffset", params, rebuild, v => Number(v).toFixed(1));
 bindCheck("slotDebug", "slotDebug", params, rebuild);
 
-// Resize
+// Resize + loop
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth - 360, window.innerHeight);
   camera.aspect = (window.innerWidth - 360) / window.innerHeight;
   camera.updateProjectionMatrix();
 });
-
-// Loop
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-rebuild();
-animate();
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+rebuild(); animate();
