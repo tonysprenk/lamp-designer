@@ -54,7 +54,32 @@
         <option value="hanging">Hanging (top cap + cable + E27)</option>
       </select>
     </div>
+<!-- Slot controls (standing mode) -->
+<div class="row"><label><span>Slot Angle (°)</span><span id="val_slotAngle"></span></label>
+  <input id="slotAngle" type="range" min="0" max="359" value="90">
+</div>
 
+<div class="row"><label><span>Slot Width (mm)</span><span id="val_slotWidth"></span></label>
+  <input id="slotWidth" type="range" min="4" max="14" step="0.5" value="8">
+</div>
+
+<div class="row"><label><span>Slot Length (mm)</span><span id="val_slotLength"></span></label>
+  <input id="slotLength" type="range" min="0" max="160" step="1" value="0">
+</div>
+
+<div class="row"><label><span>Slot Overshoot (mm)</span><span id="val_slotOvershoot"></span></label>
+  <input id="slotOvershoot" type="range" min="0" max="5" step="0.1" value="1.0">
+</div>
+
+<div class="row"><label><span>Slot Offset @ Hole (mm)</span><span id="val_slotOffset"></span></label>
+  <input id="slotOffset" type="range" min="-3" max="3" step="0.1" value="0">
+</div>
+
+<div class="row">
+  <label style="justify-content:flex-start; gap:8px;">
+    <input id="slotDebug" type="checkbox"> Show slot debug guides
+  </label>
+</div>
     <div class="row"><label><span>Finish</span></label>
       <select id="finish">
         <option value="opaque_white" selected>Opaque white (gloss)</option>
