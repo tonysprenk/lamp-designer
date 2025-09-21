@@ -16,3 +16,11 @@ export function bindSelect(id, key, params, rebuild) {
   if (!el) return;
   el.addEventListener("change", e => { params[key] = e.target.value; rebuild(); });
 }
+
+export function bindCheck(id, key, params, rebuild) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  function update(){ params[key] = !!el.checked; rebuild(); }
+  el.addEventListener("change", update);
+  update();
+}
