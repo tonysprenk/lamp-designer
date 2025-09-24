@@ -1,18 +1,26 @@
+// src/caps.js
 import * as THREE from "three";
+import { CSG } from "three-csg-ts";
 import { innerRadiusAt } from "./geometry.js";
 
 /**
- * Conforming cap at vFrac (0 bottom, 1 top), extruded +Z by capH.
- * Central E27 hole (default 20 mm R).
- * If options.bottomSlot && vFrac===0: add a D-shaped slot:
- *   - inner end = FLAT chord tangent to the E27 circle at angle theta
- *   - outer end = semicircle (rounded), overshooting rim for clean trim
+ * Conforming cap at vFrac (0 bottom, 1 top) extruded along +Z by capH.
+ * E27 hole (default 20 mm radius).
+ * If options.bottomSlot, we cut a D-slot in 2D (fast). If options.slotTilt != 0,
+ * we additionally subtract a TRUE 3D tilted capsule to rotate around the mouth axis.
+ *
+ * Slot options:
+ *   slotAngle (rad)  – centerline direction
+ *   slotRoll  (rad)  – spin capsule around centerline (in-plane)
+ *   slotMouth (rad)  – rotate mouth flat within the plane (independent of roll)
+ *   slotTilt  (rad)  – TRUE 3D tilt around mouth width axis (your “blue axis”)
+ *   slotWidth (mm), slotLength (mm | 0=auto), slotOvershoot (mm), slotOffset (mm)
  */
 export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   const radialSeg = p.res === "low" ? 96 : (p.res === "med" ? 180 : 300);
   const EPS = 1e-4;
 
-  // Outer boundary (inner wall at this height)
+  // --- Outer boundary (conform to inner wall at height vFrac) ---
   const shape = new THREE.Shape();
   for (let i = 0; i <= radialSeg; i++) {
     const u = (i % radialSeg) / radialSeg;
@@ -24,27 +32,43 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   shape.closePath();
 
   // Always subtract the circular E27 hole
-  shape.holes.push(buildCircleHole(holeR, 96));
+  shape.holes.push(circleHolePath(holeR, 96));
 
-  // Add D-shaped slot only for bottom cap
+  // 2D D-shaped slot (fast) if bottom
   if (options.bottomSlot && vFrac === 0) {
-    shape.holes.push(buildDSlot(p, vFrac, holeR, options));
+    shape.holes.push(dSlotPath(p, vFrac, holeR, options));
   }
 
-  // Extrude
-  const geom = new THREE.ExtrudeGeometry(shape, {
+  // --- Extrude along +Z ---
+  const capGeom = new THREE.ExtrudeGeometry(shape, {
     depth: capH,
     bevelEnabled: false,
     curveSegments: radialSeg
   });
   const zOff = (vFrac === 1) ? (p.height - capH) : 0;
-  geom.translate(0, 0, zOff);
-  return geom;
+  capGeom.translate(0, 0, zOff);
+
+  // --- If we have a TRUE tilt, subtract a 3D tilted capsule cutter ---
+  if (options.bottomSlot && vFrac === 0 && (options.slotTilt ?? 0) !== 0) {
+    const capMesh = new THREE.Mesh(capGeom, new THREE.MeshStandardMaterial());
+    const cutMesh = makeTiltedCapsuleCutter(p, 0, holeR, capH, options);
+
+    // three-csg-ts boolean
+    const resMesh = CSG.toMesh(
+      CSG.fromMesh(capMesh).subtract(CSG.fromMesh(cutMesh)),
+      capMesh.matrix,
+      capMesh.material
+    );
+    resMesh.geometry.computeVertexNormals();
+    return resMesh.geometry;
+  }
+
+  return capGeom;
 }
 
-/* ---------- holes ---------- */
+/* ---------------- 2D paths for extrusion ---------------- */
 
-function buildCircleHole(radius, seg = 64) {
+function circleHolePath(radius, seg = 64) {
   const h = new THREE.Path(); // clockwise
   for (let j = seg; j >= 0; j--) {
     const a = (j / seg) * Math.PI * 2;
@@ -55,61 +79,43 @@ function buildCircleHole(radius, seg = 64) {
   return h;
 }
 
-/**
- * D-shaped slot:
- *  centerline angle: options.slotAngle (rad) (0=+X, π/2=+Y, …)
- *  roll around centerline: options.slotRoll (rad)
- *  width: options.slotWidth (mm)
- *  length: options.slotLength (mm) 0 => auto to rim
- *  overshoot: options.slotOvershoot (mm)
- *  offset: options.slotOffset (mm) shift mouth in/out from E27 edge
- *
- *  Geometry in XY (cap plane):
- *   iR ---- flat mouth ---- iL          (tangent line to circle)
- *             |          |
- *             |          | (edges along +u)
- *            oR  --tip-- oL            (rounded tip beyond rim)
- */
-function buildDSlot(p, vFrac, holeR, options) {
+/** D-shaped slot: flat mouth (tangent), straight edges, rounded tip (capsule) */
+function dSlotPath(p, vFrac, holeR, options) {
   const theta = options.slotAngle ?? 0;
   const roll  = options.slotRoll  ?? 0;
+  const mouth = options.slotMouth ?? 0;
+
   const width = Math.max(0.5, options.slotWidth ?? 8);
   const halfW = width * 0.5;
   const overshoot = options.slotOvershoot ?? 1.0;
   const offset = options.slotOffset ?? 0.0;
 
-  // Centerline u and rolled width axis v (all in cap XY plane)
+  // Centerline u and mouth width axis v (in-plane)
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI / 2 + roll + (options.slotMouth || 0); // mouth rotation
+  const vAng = theta + Math.PI / 2 + roll + mouth; // flat at the mouth, tangent to circle
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
-  // Mouth location: exactly on the circle (plus optional offset)
   const rInner = Math.max(0.1, holeR + offset);
-  const p0x = ux * rInner, p0y = uy * rInner;      // mouth center (on circle radius)
-
-  // Tip center: beyond the rim
   const rAuto  = innerRadiusAt(p, vFrac, theta) * 0.995;
   const rOuter = (options.slotLength && options.slotLength > 0)
     ? (rInner + options.slotLength)
     : rAuto;
   const rTip = rOuter + halfW + overshoot;
-  const p1x = ux * rTip, p1y = uy * rTip;
 
-  // Edge points at inner (mouth) and outer (tip)
-  const iRx = p0x + vx*halfW, iRy = p0y + vy*halfW; // inner-right
-  const iLx = p0x - vx*halfW, iLy = p0y - vy*halfW; // inner-left
-  const oRx = p1x + vx*halfW, oRy = p1y + vy*halfW; // outer-right
-  const oLx = p1x - vx*halfW, oLy = p1y - vy*halfW; // outer-left
+  const p0x = ux * rInner, p0y = uy * rInner; // mouth center (on circle radius)
+  const p1x = ux * rTip,   p1y = uy * rTip;   // tip center (beyond rim)
 
-  // Build the D shape as ONE CW path:
-  // start at inner-right → out along right edge → CW tip arc → back along left edge
-  // → FLAT mouth (iL → iR) to close (this flat is tangent to the circle).
-  const h = new THREE.Path();
-  h.moveTo(iRx, iRy);                 // start mouth right
-  h.lineTo(oRx, oRy);                 // straight edge to tip
-  arcCW(h, p1x, p1y, halfW, vAng, vAng + Math.PI, 32); // tip semicircle CW
-  h.lineTo(iLx, iLy);                 // straight back along left edge
-  h.lineTo(iRx, iRy);                 // FLAT mouth (tangent) — key difference
+  const iRx = p0x + vx*halfW, iRy = p0y + vy*halfW;
+  const iLx = p0x - vx*halfW, iLy = p0y - vy*halfW;
+  const oRx = p1x + vx*halfW, oRy = p1y + vy*halfW;
+  const oLx = p1x - vx*halfW, oLy = p1y - vy*halfW;
+
+  const h = new THREE.Path(); // CW
+  h.moveTo(iRx, iRy);                             // mouth right
+  h.lineTo(oRx, oRy);                             // right edge
+  arcCW(h, p1x, p1y, halfW, vAng, vAng + Math.PI, 32); // tip arc CW
+  h.lineTo(iLx, iLy);                             // left edge
+  h.lineTo(iRx, iRy);                             // flat mouth chord (tangent plane)
   h.closePath();
   return h;
 }
@@ -125,39 +131,124 @@ function arcCW(path, cx, cy, r, aStart, aEnd, seg = 24) {
   }
 }
 
-/* ------------- optional debug (unchanged API) ------------- */
-export function buildSlotDebug(p, vFrac, holeR, options = {}) {
-  if (!(options.bottomSlot) || vFrac !== 0) return null;
-
+/* ---------------- TRUE 3D tilted capsule cutter ---------------- */
+function makeTiltedCapsuleCutter(p, vFrac, holeR, capH, options) {
   const theta = options.slotAngle ?? 0;
   const roll  = options.slotRoll  ?? 0;
+  const mouth = options.slotMouth ?? 0;
+  const tilt  = options.slotTilt  ?? 0;
+
   const width = Math.max(0.5, options.slotWidth ?? 8);
   const halfW = width * 0.5;
   const overshoot = options.slotOvershoot ?? 1.0;
   const offset = options.slotOffset ?? 0.0;
 
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI / 2 + roll + (options.slotMouth || 0);
+  const vAng = theta + Math.PI / 2 + roll + mouth;
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
   const rInner = Math.max(0.1, holeR + offset);
   const rAuto  = innerRadiusAt(p, vFrac, theta) * 0.995;
-  const rOuter = (options.slotLength && options.slotLength > 0)
-    ? (rInner + options.slotLength)
-    : rAuto;
+  const rOuter = (options.slotLength && options.slotLength > 0) ? (rInner + options.slotLength) : rAuto;
+  const rTip   = rOuter + halfW + overshoot;
+
+  const p0 = new THREE.Vector3(ux*rInner, uy*rInner, 0); // mouth center (on cap plane)
+  const p1 = new THREE.Vector3(ux*rTip,   uy*rTip,   0); // tip center (on cap plane)
+
+  // Build capsule: cylinder + two spheres (radius = halfW)
+  const cylLen = p0.distanceTo(p1);
+  const cyl = new THREE.CylinderGeometry(halfW, halfW, cylLen + 2*halfW, 32);
+  const cylMesh = new THREE.Mesh(cyl);
+  const dir = new THREE.Vector3().subVectors(p1, p0).normalize();
+  const qAlign = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+  cylMesh.quaternion.copy(qAlign);
+  cylMesh.position.copy(p0.clone().add(p1).multiplyScalar(0.5));
+
+  const s0 = new THREE.Mesh(new THREE.SphereGeometry(halfW, 32, 16));
+  s0.position.copy(p0);
+  const s1 = new THREE.Mesh(new THREE.SphereGeometry(halfW, 32, 16));
+  s1.position.copy(p1);
+
+  // Union into a single cutter mesh
+  const cutterMesh = CSG.toMesh(
+    CSG.fromMesh(cylMesh).union(CSG.fromMesh(s0)).union(CSG.fromMesh(s1)),
+    cylMesh.matrix,
+    new THREE.MeshStandardMaterial()
+  );
+
+  // Apply TRUE tilt around the mouth width axis (blue axis through p0 along v)
+  const axis = new THREE.Vector3(vx, vy, 0).normalize();
+  const qTilt = new THREE.Quaternion().setFromAxisAngle(axis, tilt);
+  cutterMesh.position.sub(p0); cutterMesh.applyQuaternion(qTilt); cutterMesh.position.add(p0);
+
+  // Make sure it fully cuts through the cap thickness (pad in Z)
+  const pad = new THREE.BoxGeometry(width*3, width*3, p.height + 20);
+  const padMesh = new THREE.Mesh(pad);
+  padMesh.position.set(p0.x + (p1.x - p0.x)/2, p0.y + (p1.y - p0.y)/2, p.height/2);
+  const cutterPadded = CSG.toMesh(
+    CSG.fromMesh(cutterMesh).union(CSG.fromMesh(padMesh)),
+    cutterMesh.matrix,
+    cutterMesh.material
+  );
+
+  return cutterPadded;
+}
+
+/* ---------------- Debug guides ---------------- */
+export function buildSlotDebug(p, vFrac, holeR, options = {}) {
+  if (!(options.bottomSlot) || vFrac !== 0) return null;
+
+  const theta = options.slotAngle ?? 0;
+  const roll  = options.slotRoll  ?? 0;
+  const mouth = options.slotMouth ?? 0;
+
+  const width = Math.max(0.5, options.slotWidth ?? 8);
+  const halfW = width * 0.5;
+  const overshoot = options.slotOvershoot ?? 1.0;
+  const offset = options.slotOffset ?? 0.0;
+
+  const ux = Math.cos(theta), uy = Math.sin(theta);
+  const vAng = theta + Math.PI / 2 + roll + mouth;
+  const vx = Math.cos(vAng),  vy = Math.sin(vAng);
+
+  const rInner = Math.max(0.1, holeR + offset);
+  const rAuto  = innerRadiusAt(p, vFrac, theta) * 0.995;
+  const rOuter = (options.slotLength && options.slotLength > 0) ? (rInner + options.slotLength) : rAuto;
   const rTip   = rOuter + halfW + overshoot;
 
   const grp = new THREE.Group();
-  grp.add(line([[ux*rInner, uy*rInner, 0],[ux*rTip, uy*rTip, 0]], 0x4ec9b0)); // centerline
-  grp.add(line([[ux*rInner + vx*halfW, uy*rInner + vy*halfW, 0],[ux*rTip + vx*halfW, uy*rTip + vy*halfW, 0]], 0xf78c6c));
-  grp.add(line([[ux*rInner - vx*halfW, uy*rInner - vy*halfW, 0],[ux*rTip - vx*halfW, uy*rTip - vy*halfW, 0]], 0xf78c6c));
-  grp.add(circle([ux*rTip, uy*rTip, 0], halfW, 32, 0xd19a66)); // tip circle
-  // show flat mouth chord
-  grp.add(line([[ux*rInner + vx*halfW, uy*rInner + vy*halfW, 0],[ux*rInner - vx*halfW, uy*rInner - vy*halfW, 0]], 0xe5c07b));
-  // rim marker
-  grp.add(circle([ux*rAuto, uy*rAuto, 0], 1.2, 24, 0x61afef));
+
+  // Centerline
+  grp.add(line([[ux*rInner, uy*rInner, 0], [ux*rTip, uy*rTip, 0]], 0x4ec9b0));
+  // Width edges
+  grp.add(line([[ux*rInner + vx*halfW, uy*rInner + vy*halfW, 0],
+                [ux*rTip   + vx*halfW, uy*rTip   + vy*halfW, 0]], 0xf78c6c));
+  grp.add(line([[ux*rInner - vx*halfW, uy*rInner - vy*halfW, 0],
+                [ux*rTip   - vx*halfW, uy*rTip   - vy*halfW, 0]], 0xf78c6c));
+
+  // Tip circle
+  grp.add(circle([ux*rTip, uy*rTip, 0], halfW, 32, 0xd19a66));
+  // Rim marker
+  grp.add(circle([ux*rAuto, uy*rAuto, 0], 1.2, 20, 0x61afef));
+  // Mouth chord (flat)
+  grp.add(line([[ux*rInner + vx*halfW, uy*rInner + vy*halfW, 0],
+                [ux*rInner - vx*halfW, uy*rInner - vy*halfW, 0]], 0xe5c07b));
+
   return grp;
 }
 
-function line(points, color){ const g=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p))); return new THREE.Line(g,new THREE.LineBasicMaterial({color})); }
-function circle(center,r,seg,color){ const pts=[]; for(let i=0;i<=seg;i++){ const a=(i/seg)*Math.PI*2; pts.push(new THREE.Vector3(center[0]+r*Math.cos(a),center[1]+r*Math.sin(a),center[2])); } const g=new THREE.BufferGeometry().setFromPoints(pts); return new THREE.LineLoop(g,new THREE.LineBasicMaterial({color})); }
+function line(points, color) {
+  const geom = new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p)));
+  const mat = new THREE.LineBasicMaterial({ color });
+  return new THREE.Line(geom, mat);
+}
+function circle(center, r, seg, color) {
+  const pts = [];
+  for (let i=0;i<=seg;i++){
+    const a = (i/seg)*Math.PI*2;
+    pts.push(new THREE.Vector3(center[0]+r*Math.cos(a), center[1]+r*Math.sin(a), center[2]));
+  }
+  const geom = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color });
+  return new THREE.LineLoop(geom, mat);
+}
