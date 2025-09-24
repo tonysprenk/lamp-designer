@@ -1,6 +1,6 @@
 // src/caps.js
 import * as THREE from "three";
-import { CSG } from "three-csg-ts";
+import { CSG } from "https://cdn.skypack.dev/three-csg-ts";
 import { innerRadiusAt } from "./geometry.js";
 
 /**
