@@ -19,6 +19,7 @@ export const params = {
   slotOffset: 0.0, // mm from hole edge (+ outward)
   slotRollDeg: 0,
   slotMouthDeg: 0,
+  slotTiltDeg: 0,   // NEW: tilt around the mouth width axis (blue axis)
   slotDebug: false
 };
 
