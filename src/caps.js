@@ -4,10 +4,10 @@ import { CSG } from "https://cdn.jsdelivr.net/npm/three-csg-ts/+esm";
 import { innerRadiusAt } from "./geometry.js";
 
 /**
- * Build a conforming cap at vFrac (0 bottom, 1 top), extruded +Z by capH.
- * Extrude only the outside contour, then subtract with CSG:
+ * Conforming cap at vFrac (0 bottom, 1 top), extruded +Z by capH.
+ * We extrude only the outside contour, then subtract with CSG:
  *  - E27 center cylinder
- *  - One capsule cutter for the cable slot (if bottomSlot)
+ *  - ONE clipped capsule (D-slot) for the cable slot when bottomSlot=true
  */
 export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   const radialSeg = p.res === "low" ? 96 : (p.res === "med" ? 180 : 300);
@@ -24,7 +24,7 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   }
   shape.closePath();
 
-  // Extrude (no holes here)
+  // Extrude (no 2D holes here)
   const capGeom = new THREE.ExtrudeGeometry(shape, {
     depth: capH,
     bevelEnabled: false,
@@ -34,14 +34,14 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   capGeom.translate(0, 0, zOff);
 
   let capMesh = new THREE.Mesh(capGeom, new THREE.MeshStandardMaterial());
-  capMesh.updateMatrixWorld(true); // bake xform for CSG
+  capMesh.updateMatrixWorld(true);
 
-  // --- Cutter A: E27 hole (single vertical cylinder through the cap) ---
-  const e27Height = p.height + 20;                             // tall so it fully cuts
+  // --- Cutter A: E27 hole (vertical through the whole lamp) ---
+  const e27Height = p.height + 20;
   const e27Geom = new THREE.CylinderGeometry(holeR, holeR, e27Height, 96);
   const e27Mesh = new THREE.Mesh(e27Geom);
-  e27Mesh.rotation.x = Math.PI / 2;                            // cylinder axis → Z
-  e27Mesh.position.set(0, 0, p.height / 2);                    // span whole lamp
+  e27Mesh.rotation.x = Math.PI / 2;                 // cylinder axis → Z
+  e27Mesh.position.set(0, 0, p.height / 2);
   e27Mesh.updateMatrixWorld(true);
 
   capMesh = CSG.toMesh(
@@ -51,7 +51,7 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   );
   capMesh.updateMatrixWorld(true);
 
-  // --- Cutter B: Slot capsule (only for bottom cap) ---
+  // --- Cutter B: D-slot (only for bottom cap) ---
   if (options.bottomSlot && vFrac === 0) {
     const slotMesh = makeCapsuleCutter3D(p, 0, holeR, capH, options);
     slotMesh.updateMatrixWorld(true);
@@ -61,6 +61,7 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
       capMesh.matrix,
       capMesh.material
     );
+    capMesh.updateMatrixWorld(true);
   }
 
   capMesh.geometry.computeVertexNormals();
@@ -68,13 +69,14 @@ export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
 }
 
 /**
- * Build a true 3D capsule cutter along the slot centerline, with optional
- * tilt around the mouth width axis (the “blue axis”). Returns a Mesh.
+ * Build a true 3D capsule along the slot centerline, optionally tilted around
+ * the mouth width axis (“blue axis”), then CLIP it at the mouth so it becomes
+ * a D-shape (flat against the E27 hole). Returns a Mesh for CSG subtraction.
  *
  * Options:
- *  slotAngle (rad)  – centerline direction
- *  slotRoll  (rad)  – spin capsule around its centerline (in-plane)
- *  slotMouth (rad)  – rotate the mouth flat within the cap plane
+ *  slotAngle (rad)  – centerline direction (0=+X, 90°=+Y)
+ *  slotRoll  (rad)  – spin around centerline (in-plane)
+ *  slotMouth (rad)  – rotate mouth flat within the cap plane
  *  slotTilt  (rad)  – TRUE 3D tilt around mouth width axis
  *  slotWidth (mm), slotLength (mm | 0=auto), slotOvershoot (mm), slotOffset (mm)
  */
@@ -89,25 +91,25 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
   const overshoot = options.slotOvershoot ?? 1.0;
   const offset = options.slotOffset ?? 0.0;
 
-  // Basis in cap plane
-  const ux = Math.cos(theta), uy = Math.sin(theta);           // centerline
-  const vAng = theta + Math.PI / 2 + roll + mouth;            // width axis (flat at mouth)
+  // Basis in cap plane (XY)
+  const ux = Math.cos(theta), uy = Math.sin(theta);               // centerline
+  const vAng = theta + Math.PI / 2 + roll + mouth;                // width axis (flat at mouth)
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
-  // Mouth & tip along centerline (XY plane)
+  // Mouth & tip along centerline in XY
   const rInner = Math.max(0.1, holeR + offset);
   const rAuto  = innerRadiusAt(p, vFrac, theta) * 0.995;
   const rOuter = (options.slotLength && options.slotLength > 0) ? (rInner + options.slotLength) : rAuto;
   const rTip   = rOuter + halfW + overshoot;
 
-  const p0 = new THREE.Vector3(ux * rInner, uy * rInner, 0);  // mouth center
-  const p1 = new THREE.Vector3(ux * rTip,   uy * rTip,   0);  // tip center
+  const p0 = new THREE.Vector3(ux * rInner, uy * rInner, 0);      // mouth center (on hole edge)
+  const p1 = new THREE.Vector3(ux * rTip,   uy * rTip,   0);      // tip center (beyond rim)
 
-  // Capsule = cylinder + two spheres
+  // Capsule = cylinder + two spheres (built along local +Y)
   const cylLen = p0.distanceTo(p1);
   const cyl = new THREE.CylinderGeometry(halfW, halfW, cylLen + 2 * halfW, 48);
   const cylMesh = new THREE.Mesh(cyl);
-  const dir = new THREE.Vector3().subVectors(p1, p0).normalize();
+  const dir = new THREE.Vector3().subVectors(p1, p0).normalize(); // desired +Y
   const qAlign = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   cylMesh.quaternion.copy(qAlign);
   cylMesh.position.copy(p0.clone().add(p1).multiplyScalar(0.5));
@@ -121,7 +123,7 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
     new THREE.MeshStandardMaterial()
   );
 
-  // TRUE 3D tilt around the mouth width axis (through p0)
+  // TRUE 3D tilt around the mouth width axis (through p0, lying in XY)
   if (tilt !== 0) {
     const axis = new THREE.Vector3(vx, vy, 0).normalize();
     const qTilt = new THREE.Quaternion().setFromAxisAngle(axis, tilt);
@@ -130,15 +132,41 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
     cutter.position.add(p0);
   }
 
-  // Make sure the cutter fully spans the cap thickness: scale in Z
-  // (Local Z is world Z because we only rotated about XY axes)
+  // Ensure the cutter spans the cap thickness (scale in local Z)
   cutter.scale.z = (p.height + 20) / capH;
   cutter.updateMatrixWorld(true);
 
-  return cutter;
+  // ---------- Clip at mouth to create D-shape (keep only "forward" half) ----------
+  // Build a forward-aligned box: +Y of box == capsule centerline direction
+  const forwardLen = cylLen + 2 * halfW + 10;
+  const clipBoxGeom = new THREE.BoxGeometry(
+    width * 3,              // across slot
+    forwardLen,             // along centerline
+    p.height + 40           // tall in Z
+  );
+  const clipBox = new THREE.Mesh(clipBoxGeom);
+  clipBox.quaternion.copy(cutter.quaternion); // align with capsule
+
+  // World direction of the box's +Y axis
+  const dirWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(clipBox.quaternion).normalize();
+
+  // Place box so its near face passes exactly through p0 and extends forward
+  const boxCenter = new THREE.Vector3().copy(p0).addScaledVector(dirWorld, forwardLen * 0.5);
+  clipBox.position.copy(boxCenter);
+  clipBox.updateMatrixWorld(true);
+
+  // Intersect: keep only the forward part (flat at mouth)
+  const clipped = CSG.toMesh(
+    CSG.fromMesh(cutter).intersect(CSG.fromMesh(clipBox)),
+    cutter.matrix,
+    cutter.material
+  );
+  clipped.updateMatrixWorld(true);
+
+  return clipped;
 }
 
-/* ---------- Debug guides (2D, in XY plane) ---------- */
+/* ---------------- Debug guides (2D in XY) ---------------- */
 export function buildSlotDebug(p, vFrac, holeR, options = {}) {
   if (!(options.bottomSlot) || vFrac !== 0) return null;
 
@@ -161,8 +189,7 @@ export function buildSlotDebug(p, vFrac, holeR, options = {}) {
   const rTip   = rOuter + halfW + overshoot;
 
   const grp = new THREE.Group();
-  // centerline & edges
-  grp.add(line([[ux*rInner, uy*rInner, 0], [ux*rTip, uy*rTip, 0]], 0x4ec9b0));
+  grp.add(line([[ux*rInner, uy*rInner, 0], [ux*rTip, uy*rTip, 0]], 0x4ec9b0)); // centerline
   grp.add(line([[ux*rInner + vx*halfW, uy*rInner + vy*halfW, 0], [ux*rTip + vx*halfW, uy*rTip + vy*halfW, 0]], 0xf78c6c));
   grp.add(line([[ux*rInner - vx*halfW, uy*rInner - vy*halfW, 0], [ux*rTip - vx*halfW, uy*rTip - vy*halfW, 0]], 0xf78c6c));
   grp.add(circle([ux*rTip, uy*rTip, 0], halfW, 32, 0xd19a66)); // tip circle
