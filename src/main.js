@@ -70,6 +70,7 @@ function rebuild() {
   setL("slotLength", params.slotLength);
   setL("slotOvershoot", Number(params.slotOvershoot).toFixed(1));
   setL("slotOffset", Number(params.slotOffset).toFixed(1));
+  setL("slotMouth", params.slotMouthDeg);
 
   if (group) { scene.remove(group); group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   group = new THREE.Group();
@@ -138,6 +139,7 @@ bindRange("slotLength","slotLength", params, rebuild);
 bindRange("slotOvershoot","slotOvershoot", params, rebuild, v => Number(v).toFixed(1));
 bindRange("slotOffset","slotOffset", params, rebuild, v => Number(v).toFixed(1));
 bindCheck("slotDebug", "slotDebug", params, rebuild);
+bindRange("slotMouth", "slotMouthDeg", params, rebuild);
 
 // Resize + loop
 window.addEventListener("resize", () => {
