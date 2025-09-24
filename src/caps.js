@@ -1,6 +1,6 @@
 // src/caps.js
 import * as THREE from "three";
-import { CSG } from "https://cdn.jsdelivr.net/npm/three-csg-ts@1.4.0/build/three-csg-ts.esm.js";
+import { CSG } from "https://cdn.jsdelivr.net/npm/three-csg-ts/+esm";
 import { innerRadiusAt } from "./geometry.js";
 
 /**
