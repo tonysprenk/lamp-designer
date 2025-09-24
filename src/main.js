@@ -96,7 +96,7 @@ function rebuild() {
     materialOuter
   );
   group.add(capTop);
-
+ 
   // --- NEW: bulb + light at end of cable ---
   const bulbGroup = new THREE.Group();
 
@@ -112,12 +112,14 @@ function rebuild() {
       thickness: 1.5
     })
   );
-  bulbMesh.position.z = params.height; // just inside lamp body
+
+  const bulbZ = params.height * 0.7; // place bulb inside the shade
+  bulbMesh.position.z = bulbZ;
   bulbGroup.add(bulbMesh);
 
   // Light source
   const bulbLight = new THREE.PointLight(0xffeeaa, 1.2, 600, 2.0);
-  bulbLight.position.set(0, 0, params.height);
+  bulbLight.position.set(0, 0, bulbZ);
   bulbGroup.add(bulbLight);
 
   group.add(bulbGroup);
