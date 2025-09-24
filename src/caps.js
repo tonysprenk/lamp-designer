@@ -121,7 +121,7 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
 
   // TRUE 3D tilt around the blue axis (mouth width axis through p0)
   const axis = new THREE.Vector3(vx, vy, 0).normalize();
-  const qTilt = new THREE.Quaternio n().setFromAxisAngle(axis, tilt);
+  const qTilt = new THREE.Quaternio().setFromAxisAngle(axis, tilt);
   cutter.position.sub(p0); cutter.applyQuaternion(qTilt); cutter.position.add(p0);
 
   // Pad in Z to be sure we cut fully through the cap
