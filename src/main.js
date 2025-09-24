@@ -4,12 +4,11 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { buildLampGeometry } from "./geometry.js";
 import { buildConformingCap } from "./caps.js";
 import { materials } from "./materials.js";
-import { params, updateParamFromUI } from "./params.js";
-import { bindRange, bindSelect, bindCheckbox } from "./ui.js";
+import { params } from "./params.js";
+import { bindRange, bindSelect } from "./ui.js"; // ⬅️ removed bindCheckbox
 
 let scene, camera, renderer, controls, mesh;
-let capTopMesh, capBottomMesh;
-let debugGroup;
+let capTopMesh;
 
 init();
 rebuild();
@@ -35,7 +34,7 @@ function init() {
   dir.position.set(100, -200, 300);
   scene.add(dir);
 
-  // -------- Bind active UI controls --------
+  // -------- Active UI controls --------
   bindRange("height", v => { params.height = v; rebuild(); });
   bindRange("rbase", v => { params.rbase = v; rebuild(); });
   bindRange("topscale", v => { params.topscale = v; rebuild(); });
@@ -48,19 +47,6 @@ function init() {
   bindSelect("finish", v => { params.finish = v; rebuild(); });
   bindSelect("res", v => { params.res = v; rebuild(); });
 
-  // -------- Commented out: standing + slot parameters --------
-  /*
-  bindRange("slotRoll", v => { params.slotRoll = v * Math.PI / 180; rebuild(); });
-  bindRange("slotAngle", v => { params.slotAngle = v * Math.PI / 180; rebuild(); });
-  bindRange("slotWidth", v => { params.slotWidth = v; rebuild(); });
-  bindRange("slotLength", v => { params.slotLength = v; rebuild(); });
-  bindRange("slotOvershoot", v => { params.slotOvershoot = v; rebuild(); });
-  bindRange("slotOffset", v => { params.slotOffset = v; rebuild(); });
-  bindRange("slotMouth", v => { params.slotMouth = v * Math.PI / 180; rebuild(); });
-  bindRange("slotTilt", v => { params.slotTilt = v * Math.PI / 180; rebuild(); });
-  bindCheckbox("slotDebug", v => { params.slotDebug = v; rebuild(); });
-  */
-
   document.getElementById("version").innerText = window.APP_VERSION || "";
   animate();
 }
@@ -68,33 +54,17 @@ function init() {
 function rebuild() {
   if (mesh) scene.remove(mesh);
   if (capTopMesh) scene.remove(capTopMesh);
-  if (capBottomMesh) scene.remove(capBottomMesh);
-  if (debugGroup) scene.remove(debugGroup);
 
   const geom = buildLampGeometry(params);
   mesh = new THREE.Mesh(geom, materials[params.finish]);
   scene.add(mesh);
 
-  // --- Hanging configuration: top cap with cable hole only ---
+  // --- Hanging configuration only ---
   if (params.mount === "hanging") {
     const capTop = buildConformingCap(params, 1, 4.0, 20, { bottomSlot: false });
     capTopMesh = new THREE.Mesh(capTop, materials[params.finish]);
     scene.add(capTopMesh);
   }
-
-  // Standing bottom cap is disabled for now
-  /*
-  if (params.mount === "standing") {
-    const capBottom = buildConformingCap(params, 0, 4.0, 20, { bottomSlot: true, ...params });
-    capBottomMesh = new THREE.Mesh(capBottom, materials[params.finish]);
-    scene.add(capBottomMesh);
-
-    if (params.slotDebug) {
-      debugGroup = buildSlotDebug(params, 0, 20, { bottomSlot: true, ...params });
-      if (debugGroup) scene.add(debugGroup);
-    }
-  }
-  */
 }
 
 function animate() {
