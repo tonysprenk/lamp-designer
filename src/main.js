@@ -80,7 +80,7 @@ function rebuild() {
   const body = new THREE.Mesh(buildSurface(params), materialOuter);
   group.add(body);
 
-  // Hanging: cable + top cap
+  // Hanging: cable
   const cable = new THREE.Mesh(
     new THREE.CylinderGeometry(2, 2, 300, 24),
     new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
@@ -89,6 +89,7 @@ function rebuild() {
   cable.position.z = params.height + 150;  // above top
   group.add(cable);
 
+  // Hanging: top cap
   const capH = 5;
   const capTop = new THREE.Mesh(
     buildConformingCap(params, 1, capH, 20, { bottomSlot: false }),
@@ -96,6 +97,32 @@ function rebuild() {
   );
   group.add(capTop);
 
+  // --- NEW: bulb + light at end of cable ---
+  const bulbGroup = new THREE.Group();
+
+  // Bulb mesh (simple sphere for now)
+  const bulbMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(10, 32, 32),
+    new THREE.MeshPhysicalMaterial({
+      color: 0xffffcc,
+      emissive: 0xffffaa,
+      emissiveIntensity: 1.5,
+      roughness: 0.4,
+      transmission: 0.9,
+      thickness: 1.5
+    })
+  );
+  bulbMesh.position.z = params.height; // just inside lamp body
+  bulbGroup.add(bulbMesh);
+
+  // Light source
+  const bulbLight = new THREE.PointLight(0xffeeaa, 1.2, 600, 2.0);
+  bulbLight.position.set(0, 0, params.height);
+  bulbGroup.add(bulbLight);
+
+  group.add(bulbGroup);
+
+  // Positioning
   group.position.z = 0;
   controls.target.set(0, 0, params.height * 0.5);
   controls.update();
@@ -112,13 +139,9 @@ bindRange("amp", "amp", params, rebuild, v => Number(v).toFixed(2));
 bindRange("twist", "twist", params, rebuild);
 
 bindSelect("ripdir", "ripdir", params, rebuild);
-// Mount select is ignored internally, but we keep the binding harmless:
-bindSelect("mount", "mount", params, rebuild);
+bindSelect("mount", "mount", params, rebuild); // ignored but harmless
 bindSelect("finish", "finish", params, rebuild);
 bindSelect("res", "res", params, rebuild);
-
-// Standing/slot controls intentionally disabled:
-// (Angle/Roll/Mouth/Tilt/Width/Length/Overshoot/Offset/Debug)
 
 // Resize
 window.addEventListener("resize", () => {
