@@ -108,7 +108,7 @@ function rebuild() {
       emissive: 0xffffaa,
       emissiveIntensity: 15,
       roughness: 0.4,
-      transmission: 0.9,
+      transmission: 9,
       thickness: 1.5
     })
   );
