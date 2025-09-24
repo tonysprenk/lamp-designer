@@ -51,7 +51,7 @@
     </div>
 
     <div class="row"><label><span>Mounting</span></label>
-      <select id="mount">
+    <select id="mount">
         <option value="standing" selected>Standing (bottom cap + E27)</option>
         <option value="hanging">Hanging (top cap + cable + E27)</option>
       </select>
@@ -75,6 +75,10 @@
 
 <div class="row"><label><span>Slot Offset @ Hole (mm)</span><span id="val_slotOffset"></span></label>
   <input id="slotOffset" type="range" min="-3" max="3" step="0.1" value="0">
+</div>
+    <div class="row">
+  <label><span>Mouth Rotation (°)</span><span id="val_slotMouth"></span></label>
+  <input id="slotMouth" type="range" min="-180" max="180" step="1" value="0">
 </div>
 
 <div class="row">
