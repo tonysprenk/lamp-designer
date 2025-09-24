@@ -90,6 +90,7 @@ function rebuild() {
       slotRoll:  (params.slotRollDeg  * Math.PI) / 180,
       slotLength: params.slotLength || 0,
       slotOvershoot: params.slotOvershoot,
+      slotMouth: (params.slotMouthDeg * Math.PI) / 180,
       slotOffset: params.slotOffset
     };
     group.add(new THREE.Mesh(buildConformingCap(params, 0, capH, 20, opts), materialOuter));
