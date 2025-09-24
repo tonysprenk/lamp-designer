@@ -80,7 +80,7 @@ function buildDSlot(p, vFrac, holeR, options) {
 
   // Centerline u and rolled width axis v (all in cap XY plane)
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI / 2 + roll + Math.PI / 2;
+  const vAng = theta + Math.PI / 2 + roll + (options.slotMouth || 0); // mouth rotation
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
   // Mouth location: exactly on the circle (plus optional offset)
@@ -137,7 +137,7 @@ export function buildSlotDebug(p, vFrac, holeR, options = {}) {
   const offset = options.slotOffset ?? 0.0;
 
   const ux = Math.cos(theta), uy = Math.sin(theta);
-  const vAng = theta + Math.PI / 2 + roll + Math.PI / 2;
+  const vAng = theta + Math.PI / 2 + roll + (options.slotMouth || 0);
   const vx = Math.cos(vAng),  vy = Math.sin(vAng);
 
   const rInner = Math.max(0.1, holeR + offset);
