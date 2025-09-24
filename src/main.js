@@ -106,7 +106,7 @@ function rebuild() {
     new THREE.MeshPhysicalMaterial({
       color: 0xffffcc,
       emissive: 0xffffaa,
-      emissiveIntensity: 1.5,
+      emissiveIntensity: 15,
       roughness: 0.4,
       transmission: 0.9,
       thickness: 1.5
