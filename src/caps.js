@@ -124,19 +124,23 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
   const qTilt = new THREE.Quaternion().setFromAxisAngle(axis, tilt);
   cutter.position.sub(p0); cutter.applyQuaternion(qTilt); cutter.position.add(p0);
 
-  // Pad in Z to be sure we cut fully through the cap
-  const pad = new THREE.BoxGeometry(width*3, width*3, p.height + 20);
-  const padMesh = new THREE.Mesh(pad);
-  padMesh.position.set((p0.x+p1.x)/2, (p0.y+p1.y)/2, p.height/2);
+  // Pad in Z so the cutter fully penetrates the cap, but keep it ALIGNED to the slot
+const padGeom = new THREE.BoxGeometry(
+  width * 1.1,                     // just wider than the slot
+  (p0.distanceTo(p1) + 2*halfW) * 1.05, // just longer than capsule
+  p.height + 20                    // tall in Z to pass through
+);
+const padMesh = new THREE.Mesh(padGeom);
 
-  cutter = CSG.toMesh(
-    CSG.fromMesh(cutter).union(CSG.fromMesh(padMesh)),
-    cutter.matrix,
-    cutter.material
-  );
+// align pad to the capsule orientation + position
+padMesh.quaternion.copy(cutter.quaternion);
+padMesh.position.copy(cutter.position);
 
-  return cutter;
-}
+cutter = CSG.toMesh(
+  CSG.fromMesh(cutter).union(CSG.fromMesh(padMesh)),
+  cutter.matrix,
+  cutter.material
+);
 
 /* ---------------- Debug guides (unchanged API) ---------------- */
 export function buildSlotDebug(p, vFrac, holeR, options = {}) {
