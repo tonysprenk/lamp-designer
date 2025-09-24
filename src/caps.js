@@ -112,24 +112,8 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
     cutter.position.add(p0);
   }
 
-  // Pad aligned with cutter, tall in Z so we fully punch through cap
-  const padGeom = new THREE.BoxGeometry(
-    width * 1.1,
-    (p0.distanceTo(p1) + 2*halfW) * 1.05,
-    p.height + 20
-  );
-  const padMesh = new THREE.Mesh(padGeom);
-  padMesh.quaternion.copy(cutter.quaternion);
-  padMesh.position.copy(cutter.position);
-
-  cutter = CSG.toMesh(
-    CSG.fromMesh(cutter).union(CSG.fromMesh(padMesh)),
-    cutter.matrix,
-    cutter.material
-  );
-
-  return cutter;
-}
+  // Instead of padding, just stretch the capsule tall in Z so it clears cap thickness
+    cutter.scale.z = (p.height + 20) / capH;
 
 /* ---------- Debug guides ---------- */
 function buildSlotDebug(p, vFrac, holeR, options = {}) {
