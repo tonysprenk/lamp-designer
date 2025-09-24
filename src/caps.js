@@ -1,3 +1,4 @@
+// src/caps.js
 import * as THREE from "three";
 import { CSG } from "https://cdn.jsdelivr.net/npm/three-csg-ts/+esm";
 import { innerRadiusAt } from "./geometry.js";
@@ -8,7 +9,7 @@ import { innerRadiusAt } from "./geometry.js";
  *  - E27 center cylinder
  *  - Single capsule cutter for the cable slot (if bottomSlot)
  */
-function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
+export function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   const radialSeg = p.res === "low" ? 96 : (p.res === "med" ? 180 : 300);
   const EPS = 1e-4;
 
@@ -37,7 +38,7 @@ function buildConformingCap(p, vFrac, capH, holeR = 20, options = {}) {
   const e27H = p.height + 20;
   const e27Geom = new THREE.CylinderGeometry(holeR, holeR, e27H, 96);
   const e27Mesh = new THREE.Mesh(e27Geom);
-  e27Mesh.rotation.x = Math.PI / 2;        // make axis Z
+  e27Mesh.rotation.x = Math.PI / 2;        // cylinder axis → Z
   e27Mesh.position.set(0, 0, p.height / 2);
   capMesh = CSG.toMesh(
     CSG.fromMesh(capMesh).subtract(CSG.fromMesh(e27Mesh)),
@@ -103,7 +104,7 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
     new THREE.MeshStandardMaterial()
   );
 
-  // True 3D tilt around mouth width axis (blue axis) through p0
+  // True 3D tilt around the mouth width axis (blue axis) through p0
   if (tilt !== 0) {
     const axis = new THREE.Vector3(vx, vy, 0).normalize();
     const qTilt = new THREE.Quaternion().setFromAxisAngle(axis, tilt);
@@ -112,11 +113,15 @@ function makeCapsuleCutter3D(p, vFrac, holeR, capH, options) {
     cutter.position.add(p0);
   }
 
-  // Instead of padding, just stretch the capsule tall in Z so it clears cap thickness
-    cutter.scale.z = (p.height + 20) / capH;
+  // Ensure cutter fully spans cap thickness by scaling in its local Z
+  // (local Z is world Z because we only rotated around XY)
+  cutter.scale.z = (p.height + 20) / capH;
+
+  return cutter;
+}
 
 /* ---------- Debug guides ---------- */
-function buildSlotDebug(p, vFrac, holeR, options = {}) {
+export function buildSlotDebug(p, vFrac, holeR, options = {}) {
   if (!(options.bottomSlot) || vFrac !== 0) return null;
 
   const theta = options.slotAngle ?? 0;
@@ -160,5 +165,3 @@ function circle(center, r, seg, color) {
   const mat = new THREE.LineBasicMaterial({ color });
   return new THREE.LineLoop(geom, mat);
 }
-
-export { buildConformingCap, buildSlotDebug };
