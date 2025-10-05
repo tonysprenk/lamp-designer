@@ -9,24 +9,22 @@
     :root{
       /* Light panel, dark stage */
       --stage-bg: #0e1116;          /* keep dark for lamp visibility */
-      --panel-bg: #f6f8fb;          /* light sidebar */
+      --panel-bg: #f6f8fb;          /* light controls panel */
       --panel-border: #d9e0ea;
       --text: #1c2636;
       --muted: #5b6b82;
-      --primary: #2b6ef3;
       --chip: #eef3ff;
       --chip-text:#2754b5;
       --slider-track:#d7dfeb;
-      --slider-fill:#9bb7ff;
       --slider-thumb:#2b6ef3;
     }
 
     *{box-sizing:border-box}
-    html, body { height:100%; margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color:var(--text); background:var(--stage-bg); }
-    #app { display:grid; grid-template-columns: 360px 1fr; height:100%; }
+    html, body { height:100%; margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; color:var(--text); background:var(--stage-bg); }
+    #app { display:grid; grid-template-columns:360px 1fr; height:100%; }
 
-    /* Sidebar */
-    aside {
+    /* Desktop sidebar (default) */
+    aside#sidebar {
       background:var(--panel-bg);
       border-right:1px solid var(--panel-border);
       overflow:auto; padding:16px;
@@ -40,14 +38,9 @@
       background:white; border:1px solid var(--panel-border); border-radius:10px; padding:10px 12px; color:var(--text);
       outline:none;
     }
-    input[type=range]{
-      -webkit-appearance:none; height:32px; background:transparent; padding:6px 0;
-    }
+    input[type=range]{ -webkit-appearance:none; height:32px; background:transparent; padding:6px 0; }
     input[type=range]::-webkit-slider-runnable-track{ height:6px; background:var(--slider-track); border-radius:999px; }
-    input[type=range]::-webkit-slider-thumb{
-      -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
-      background:var(--slider-thumb); margin-top:-8px; box-shadow:0 1px 3px rgba(0,0,0,.2);
-    }
+    input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--slider-thumb); margin-top:-8px; box-shadow:0 1px 3px rgba(0,0,0,.2); }
     input[type=range]::-moz-range-track{ height:6px; background:var(--slider-track); border-radius:999px; }
     input[type=range]::-moz-range-thumb{ width:22px; height:22px; border:none; border-radius:50%; background:var(--slider-thumb); }
 
@@ -56,32 +49,47 @@
     /* Stage */
     #canvas { display:block; width:100%; height:100%; background:var(--stage-bg); }
 
-    /* Header row in sidebar with toggle on mobile */
-    .panel-header{
-      display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;
-    }
-    .brand{ display:flex; align-items:baseline; gap:8px; }
-    .toggle{
-      display:none;
-      border:1px solid var(--panel-border); background:white; color:var(--text);
-      border-radius:10px; padding:8px 12px; font-size:14px;
+    /* ---------- Mobile: bottom sheet instead of sidebar ---------- */
+    @media (max-width: 900px){
+      #app{ 
+        grid-template-columns: 1fr; 
+        grid-template-rows: 1fr auto; /* canvas then panel */
+      }
+      aside#sidebar{
+        grid-column: 1 / 2;
+        grid-row: 2 / 3;
+        width: 100%;
+        max-height: 45vh;              /* roughly bottom third */
+        height: min(45vh, 420px);
+        border-right: none;
+        border-top: 1px solid var(--panel-border);
+        padding-bottom: 12px;
+        overflow:auto;
+      }
+      /* Collapsed bottom sheet (peek) */
+      aside#sidebar.collapsed{
+        height: 56px;
+        max-height: 56px;
+        overflow: hidden;
+      }
+      /* Bottom sheet handle */
+      .sheet-handle{
+        display:flex; align-items:center; justify-content:space-between; gap:8px;
+        position: sticky; top: 0; background: var(--panel-bg); padding:8px 4px 6px 4px;
+      }
+      .dragbar{
+        width: 48px; height: 5px; border-radius: 999px; background:#cdd7e7; margin: 0 auto 6px auto;
+      }
+      .toggle{
+        border:1px solid var(--panel-border); background:white; color:var(--text);
+        border-radius:10px; padding:6px 10px; font-size:13px;
+      }
+      /* Hide desktop title row on mobile; we replace with handle */
+      .desktop-header { display:none; }
     }
 
-    /* Mobile: panel becomes a drawer */
-    @media (max-width: 900px){
-      #app{ grid-template-columns: 1fr; }
-      aside{
-        position:fixed; inset:0 auto 0 0; width:min(88vw, 380px); transform:translateX(-100%);
-        transition:transform .25s ease; z-index:10; box-shadow: 0 10px 30px rgba(0,0,0,.25);
-      }
-      aside.open{ transform:none; }
-      .toggle{ display:inline-flex; }
-      /* Put a small top bar on stage for toggle button */
-      .stage-topbar{
-        position:fixed; top:10px; left:10px; z-index:9;
-        display:flex; gap:8px;
-      }
-    }
+    /* Desktop: show title row; mobile uses bottom sheet header */
+    .desktop-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
   </style>
 
   <script type="importmap">
@@ -94,16 +102,20 @@
   }
   </script>
 
-  <script> window.APP_VERSION = "0.9.0"; </script>
+  <script> window.APP_VERSION = "0.9.1"; </script>
 </head>
 <body>
 <div id="app">
-  <aside id="sidebar">
-    <div class="panel-header">
-      <div class="brand">
-        <h1>Organic Lamp Designer <span id="version"></span></h1>
-      </div>
-      <button id="closePanel" class="toggle">Close</button>
+  <aside id="sidebar" class="collapsed"><!-- start collapsed on mobile -->
+    <!-- Desktop header -->
+    <div class="desktop-header">
+      <h1>Organic Lamp Designer <span id="version"></span></h1>
+    </div>
+
+    <!-- Mobile bottom-sheet handle -->
+    <div class="sheet-handle">
+      <div class="dragbar"></div>
+      <button id="togglePanel" class="toggle">Controls</button>
     </div>
 
     <div class="row"><label><span>Height (mm)</span><span id="val_height"></span></label><input id="height" type="range" min="120" max="250" value="230"></div>
@@ -147,33 +159,36 @@
     <div class="note">Hanging lamp preview. Vase-mode preview; internal ~0.7 mm wall for manufacturing. E27 hole fixed.</div>
   </aside>
 
-  <div class="stage-topbar">
-    <button id="openPanel" class="toggle">Controls</button>
-  </div>
-
   <canvas id="canvas"></canvas>
 </div>
 
 <script type="module">
   import "@app/main.js";
+  import { forceResize } from "@app/main.js";
 
-  // Drawer logic (mobile)
+  // Mobile bottom-sheet toggle
   const aside = document.getElementById('sidebar');
-  const openBtn = document.getElementById('openPanel');
-  const closeBtn = document.getElementById('closePanel');
+  const btn   = document.getElementById('togglePanel');
 
-  function openPanel(){ aside.classList.add('open'); }
-  function closePanel(){ aside.classList.remove('open'); }
+  function isMobile(){ return window.matchMedia('(max-width: 900px)').matches; }
+  function openPanel(){ aside.classList.remove('collapsed'); forceResize(); }
+  function closePanel(){ aside.classList.add('collapsed'); forceResize(); }
+  function togglePanel(){
+    if (!isMobile()) return; // desktop: ignore
+    aside.classList.toggle('collapsed');
+    // wait for CSS transition? not needed; we compute sizes instantly
+    forceResize();
+  }
+  btn.addEventListener('click', togglePanel);
 
-  openBtn?.addEventListener('click', openPanel);
-  closeBtn?.addEventListener('click', closePanel);
-
-  // Close drawer when clicking outside on small screens
-  document.addEventListener('click', (e)=>{
-    if (window.matchMedia('(max-width: 900px)').matches){
-      if (!aside.contains(e.target) && !openBtn.contains(e.target)) closePanel();
-    }
-  });
+  // Start expanded on desktop
+  function syncInitialState(){
+    if (!isMobile()){ aside.classList.remove('collapsed'); }
+    else { aside.classList.add('collapsed'); } // collapsed peek on mobile
+    forceResize();
+  }
+  window.addEventListener('resize', syncInitialState, { passive:true });
+  syncInitialState();
 </script>
 </body>
 </html>
