@@ -86,20 +86,7 @@ const capH = 5;
 // 1) Bulb depth inside the shade
 const bulbZ = params.height * 0.70; // deeper inside lamp; adjust 0.6–0.8 as desired
 
-// Bulb mesh
-const bulbMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(10, 32, 32),
-  new THREE.MeshPhysicalMaterial({
-    color: 0xffffcc,
-    emissive: 0xffffaa,
-    emissiveIntensity: 1.5,
-    roughness: 0.4,
-    transmission: 0.9,
-    thickness: 1.5
-  })
-);
-bulbMesh.position.z = bulbZ;
-group.add(bulbMesh);
+
 
 // Light source at bulb center
 const bulbLight = new THREE.PointLight(0xffeeaa, 1.2, 600, 2.0);
