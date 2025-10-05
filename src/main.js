@@ -80,22 +80,61 @@ function rebuild() {
   const body = new THREE.Mesh(buildSurface(params), materialOuter);
   group.add(body);
 
-  // Hanging: cable
-  const cable = new THREE.Mesh(
-    new THREE.CylinderGeometry(2, 2, 300, 24),
-    new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
-  );
-  cable.rotation.x = Math.PI / 2;          // run along +Z
-  cable.position.z = params.height + 150;  // above top
-  group.add(cable);
+// Hanging: cable → socket → bulb → top cap
+const capH = 5;
 
-  // Hanging: top cap
-  const capH = 5;
-  const capTop = new THREE.Mesh(
-    buildConformingCap(params, 1, capH, 20, { bottomSlot: false }),
-    materialOuter
-  );
-  group.add(capTop);
+// 1) Bulb depth inside the shade
+const bulbZ = params.height * 0.70; // deeper inside lamp; adjust 0.6–0.8 as desired
+
+// Bulb mesh
+const bulbMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(10, 32, 32),
+  new THREE.MeshPhysicalMaterial({
+    color: 0xffffcc,
+    emissive: 0xffffaa,
+    emissiveIntensity: 1.5,
+    roughness: 0.4,
+    transmission: 0.9,
+    thickness: 1.5
+  })
+);
+bulbMesh.position.z = bulbZ;
+group.add(bulbMesh);
+
+// Light source at bulb center
+const bulbLight = new THREE.PointLight(0xffeeaa, 1.2, 600, 2.0);
+bulbLight.position.set(0, 0, bulbZ);
+group.add(bulbLight);
+
+// 2) Cable that actually reaches the bulb
+const cableTopZ = params.height + 150;           // hang-from point above lamp
+const cableBottomZ = bulbZ + 8;                  // meet the socket just above bulb
+const cableLen = Math.max(10, cableTopZ - cableBottomZ);
+const cable = new THREE.Mesh(
+  new THREE.CylinderGeometry(2, 2, cableLen, 24),
+  new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
+);
+cable.rotation.x = Math.PI / 2;                  // orient cylinder along Z
+cable.position.z = (cableTopZ + cableBottomZ) * 0.5;
+group.add(cable);
+
+// 3) Little socket that connects cable to bulb
+const socketH = 12;
+const socketR = 6;
+const socket = new THREE.Mesh(
+  new THREE.CylinderGeometry(socketR, socketR, socketH, 24),
+  new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.6, metalness: 0.3 })
+);
+socket.rotation.x = Math.PI / 2;                 // along Z
+socket.position.z = cableBottomZ - socketH * 0.5; // sits between cable and bulb
+group.add(socket);
+
+// 4) Top cap (unchanged)
+const capTop = new THREE.Mesh(
+  buildConformingCap(params, 1, capH, 20, { bottomSlot: false }),
+  materialOuter
+);
+group.add(capTop);
  
   // --- NEW: bulb + light at end of cable ---
   const bulbGroup = new THREE.Group();
