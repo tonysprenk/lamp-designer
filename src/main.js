@@ -14,8 +14,8 @@ const ver = document.getElementById("version");
 if (ver && window.APP_VERSION) ver.textContent = "v" + window.APP_VERSION;
 if (window.APP_VERSION) console.log("Organic Lamp Designer v" + window.APP_VERSION);
 
-// ---- Stage sizing helpers (desktop sidebar vs mobile bottom sheet) ----
-function isMobile(){ return window.matchMedia("(max-width: 900px)").matches; }
+// ---- Stage sizing helpers (desktop sidebar vs. mobile bottom sheet) ----
+function isMobile() { return window.matchMedia("(max-width: 900px)").matches; }
 
 function getStageWidth() {
   const app = document.getElementById("app");
@@ -23,11 +23,11 @@ function getStageWidth() {
   const appW = app?.clientWidth || window.innerWidth;
 
   if (!isMobile()) {
-    // Desktop: subtract sidebar width (grid column is 360px by CSS)
+    // Desktop: sidebar consumes a fixed grid column (≈360px)
     const asideW = aside?.offsetWidth || 360;
     return Math.max(200, appW - asideW);
   }
-  // Mobile: full width (panel is at bottom)
+  // Mobile: panel sits at bottom, so stage uses full width
   return appW;
 }
 
@@ -39,7 +39,7 @@ function getStageHeight() {
     // Desktop: full height for stage
     return winH;
   }
-  // Mobile: subtract the bottom sheet height (collapsed or expanded)
+  // Mobile: subtract bottom sheet height (collapsed or expanded)
   const panelH = aside ? aside.offsetHeight : 0;
   return Math.max(200, winH - panelH);
 }
@@ -53,7 +53,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e1116); // keep dark so lamp pops
+scene.background = new THREE.Color(0x0e1116); // dark stage so lamp pops
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
 
@@ -71,7 +71,7 @@ controls.target.set(0, 0, 115);
 controls.enableDamping = true;
 controls.update();
 
-// ---- Responsive sizing (desktop sidebar + mobile bottom sheet) ----
+// ---- Responsive sizing on load and resize ----
 renderer.setSize(getStageWidth(), getStageHeight());
 camera.aspect = getStageWidth() / getStageHeight();
 camera.updateProjectionMatrix();
@@ -81,7 +81,7 @@ export function forceResize() {
   camera.aspect = getStageWidth() / getStageHeight();
   camera.updateProjectionMatrix();
 }
-window.addEventListener("resize", forceResize, { passive:true });
+window.addEventListener("resize", forceResize, { passive: true });
 
 // ---- Lights & helpers ----
 scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
@@ -99,11 +99,11 @@ let group;
 let materialOuter;
 
 function rebuild() {
-  // Force hanging mode while we focus on that UX
+  // Focus on hanging mode
   params.mount = "hanging";
   clampForBambu(params);
 
-  // Update sidebar labels (shape params only)
+  // Update small value labels (shape params only)
   const setL = (id, v) => {
     const el = document.getElementById("val_" + id);
     if (el) el.textContent = String(v);
@@ -131,8 +131,8 @@ function rebuild() {
   // ---- Hanging: cable → socket → bulb → top cap ----
   const capH = 5;
 
-  // Bulb depth: hang it inside the shade (70% down from top)
-  const bulbZ = params.height * 0.70; // tweak 0.6–0.8 to taste
+  // Bulb depth: hang it inside the shade (70% of height is a good start)
+  const bulbZ = params.height * 0.70;
 
   // Bulb mesh (simple frosted sphere)
   const bulbMesh = new THREE.Mesh(
@@ -154,17 +154,18 @@ function rebuild() {
   bulbLight.position.set(0, 0, bulbZ);
   group.add(bulbLight);
 
-  // Cable from hanger point down to a socket above bulb
-  const cableTopZ = params.height + 150;  // hanger point above top
+  // Cable from hanger point down to the socket just above bulb
+  const cableTopZ = params.height + 150;  // hanger point above lamp
   const socketH = 12;
   const socketR = 6;
-  const socketTopZ = bulbZ + 8;          // where cable meets socket
+  const socketTopZ = bulbZ + 8;           // where cable meets socket
   const cableLen = Math.max(10, cableTopZ - socketTopZ);
+
   const cable = new THREE.Mesh(
     new THREE.CylinderGeometry(2, 2, cableLen, 24),
     new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
   );
-  cable.rotation.x = Math.PI / 2; // cylinder's Y-axis → world Z
+  cable.rotation.x = Math.PI / 2; // orient cylinder along Z
   cable.position.z = (cableTopZ + socketTopZ) * 0.5;
   group.add(cable);
 
@@ -190,6 +191,9 @@ function rebuild() {
   controls.update();
 
   scene.add(group);
+
+  // After rebuild, ensure canvas uses the current layout space
+  forceResize();
 }
 
 // ---- UI bindings (shape + look only) ----
@@ -201,18 +205,10 @@ bindRange("amp", "amp", params, rebuild, v => Number(v).toFixed(2));
 bindRange("twist", "twist", params, rebuild);
 
 bindSelect("ripdir", "ripdir", params, rebuild);
-// Mount is fixed to "hanging" in rebuild, but keeping the binding is harmless:
+// Mount is forced to "hanging" internally; binding is harmless for now:
 bindSelect("mount", "mount", params, rebuild);
 bindSelect("finish", "finish", params, rebuild);
 bindSelect("res", "res", params, rebuild);
-
-// ---- Resize handling ----
-export function forceResize() {
-  renderer.setSize(getStageWidth(), getStageHeight());
-  camera.aspect = getStageWidth() / getStageHeight();
-  camera.updateProjectionMatrix();
-}
-window.addEventListener("resize", forceResize);
 
 // ---- Render loop ----
 function animate() {
