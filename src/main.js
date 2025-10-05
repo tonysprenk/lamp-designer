@@ -14,19 +14,34 @@ const ver = document.getElementById("version");
 if (ver && window.APP_VERSION) ver.textContent = "v" + window.APP_VERSION;
 if (window.APP_VERSION) console.log("Organic Lamp Designer v" + window.APP_VERSION);
 
-// ---- Stage sizing helpers (work with mobile drawer) ----
+// ---- Stage sizing helpers (desktop sidebar vs mobile bottom sheet) ----
+function isMobile(){ return window.matchMedia("(max-width: 900px)").matches; }
+
 function getStageWidth() {
   const app = document.getElementById("app");
   const aside = document.getElementById("sidebar");
   const appW = app?.clientWidth || window.innerWidth;
-  // On mobile (<=900px) when drawer is closed, aside width should be treated as 0
-  const isMobile = window.matchMedia("(max-width: 900px)").matches;
-  const asideOpen = aside?.classList.contains("open");
-  const asideW = isMobile ? (asideOpen ? (aside?.offsetWidth || 0) : 0) : (aside?.offsetWidth || 360);
-  return Math.max(200, appW - asideW);
+
+  if (!isMobile()) {
+    // Desktop: subtract sidebar width (grid column is 360px by CSS)
+    const asideW = aside?.offsetWidth || 360;
+    return Math.max(200, appW - asideW);
+  }
+  // Mobile: full width (panel is at bottom)
+  return appW;
 }
+
 function getStageHeight() {
-  return window.innerHeight;
+  const aside = document.getElementById("sidebar");
+  const winH = window.innerHeight;
+
+  if (!isMobile()) {
+    // Desktop: full height for stage
+    return winH;
+  }
+  // Mobile: subtract the bottom sheet height (collapsed or expanded)
+  const panelH = aside ? aside.offsetHeight : 0;
+  return Math.max(200, winH - panelH);
 }
 
 // ---- Renderer & scene ----
@@ -55,6 +70,18 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 115);
 controls.enableDamping = true;
 controls.update();
+
+// ---- Responsive sizing (desktop sidebar + mobile bottom sheet) ----
+renderer.setSize(getStageWidth(), getStageHeight());
+camera.aspect = getStageWidth() / getStageHeight();
+camera.updateProjectionMatrix();
+
+export function forceResize() {
+  renderer.setSize(getStageWidth(), getStageHeight());
+  camera.aspect = getStageWidth() / getStageHeight();
+  camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", forceResize, { passive:true });
 
 // ---- Lights & helpers ----
 scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
