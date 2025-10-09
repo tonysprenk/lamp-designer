@@ -7,9 +7,8 @@
 
   <style>
     :root{
-      /* Light panel, dark stage */
-      --stage-bg: #0e1116;          /* keep dark for lamp visibility */
-      --panel-bg: #f6f8fb;          /* light controls panel */
+      --stage-bg: #0e1116;
+      --panel-bg: #f6f8fb;
       --panel-border: #d9e0ea;
       --text: #1c2636;
       --muted: #5b6b82;
@@ -19,15 +18,16 @@
     }
 
     *{box-sizing:border-box}
-    html, body { height:100%; margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; color:var(--text); background:var(--stage-bg); }
+    html, body { height:100%; margin:0; font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; color:var(--text); background:var(--stage-bg); }
     #app { display:grid; grid-template-columns:360px 1fr; height:100%; }
 
-    /* Desktop sidebar (default) */
     aside#sidebar {
       background:var(--panel-bg);
       border-right:1px solid var(--panel-border);
       overflow:auto; padding:16px;
+      display:flex; flex-direction:column;
     }
+
     h1 { font-size:18px; margin:0 0 10px; color:var(--text); display:flex; align-items:baseline; gap:8px; }
     #version { font-size:12px; color:var(--muted); background:#eef3ff; border-radius:999px; padding:2px 8px; }
     .row { margin:12px 0 18px; }
@@ -40,74 +40,77 @@
     input[type=range]{ -webkit-appearance:none; height:32px; background:transparent; padding:6px 0; }
     input[type=range]::-webkit-slider-runnable-track{ height:6px; background:var(--slider-track); border-radius:999px; }
     input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--slider-thumb); margin-top:-8px; box-shadow:0 1px 3px rgba(0,0,0,.2); }
-    input[type=range]::-moz-range-track{ height:6px; background:var(--slider-track); border-radius:999px; }
-    input[type=range]::-moz-range-thumb{ width:22px; height:22px; border:none; border-radius:50%; background:var(--slider-thumb); }
 
     .note { font-size:11px; color:var(--muted); margin-top:10px; }
 
-    /* Stage */
+    /* Download button */
+    .download-btn{
+      margin-top:auto;
+      background:#2b6ef3;
+      color:white;
+      border:none;
+      padding:12px;
+      border-radius:10px;
+      font-size:15px;
+      font-weight:600;
+      cursor:pointer;
+      transition:background .2s ease;
+      text-align:center;
+    }
+    .download-btn:hover{ background:#1958d9; }
+
     #canvas { display:block; width:100%; height:100%; background:var(--stage-bg); }
 
-    /* ---------- Mobile: bottom sheet instead of sidebar ---------- */
+    /* ---------- Mobile bottom sheet ---------- */
     @media (max-width: 900px){
       #app{
         display:grid;
         grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto; /* canvas (1fr) then panel (auto) */
-        height: 100svh;               /* stable height on iOS */
+        grid-template-rows: 1fr auto;
+        height: 100svh;
       }
 
       aside#sidebar{
-        grid-column: 1 / 2;
         grid-row: 2 / 3;
         width: 100%;
-        max-height: 48svh;             /* ≈ bottom third to half */
+        max-height: 48svh;
         height: min(48svh, 420px);
-        border-right: none;
-        border-top: 1px solid var(--panel-border);
-        background: var(--panel-bg);
-        display: flex;
-        flex-direction: column;
-        padding: 0;                     /* pad inside content instead */
+        border-right:none;
+        border-top:1px solid var(--panel-border);
+        background:var(--panel-bg);
+        padding:0;
       }
 
-      /* Collapsed bottom sheet (peek) */
       aside#sidebar.collapsed{
-        height: 56px;
-        max-height: 56px;
-        overflow: hidden;
+        height:56px;
+        max-height:56px;
+        overflow:hidden;
       }
 
-      /* Sticky handle row */
       .sheet-handle{
-        position: sticky; top: 0;
-        background: var(--panel-bg);
-        padding: 8px 12px;
-        z-index: 1;
-        border-bottom: 1px solid var(--panel-border);
+        position:sticky; top:0;
+        background:var(--panel-bg);
+        padding:8px 12px;
+        z-index:1;
+        border-bottom:1px solid var(--panel-border);
         display:flex; align-items:center; justify-content:space-between; gap:8px;
       }
       .dragbar{ width:48px; height:5px; border-radius:999px; background:#cdd7e7; }
-
-      /* Scrollable content area under the handle */
       .sheet-content{
-        padding: 12px 16px 14px;
-        overflow: auto;
-        -webkit-overflow-scrolling: touch;
-        max-height: calc(100% - 42px); /* total minus handle height */
+        padding:12px 16px 14px;
+        overflow:auto;
+        -webkit-overflow-scrolling:touch;
+        max-height:calc(100% - 42px);
+        display:flex; flex-direction:column;
       }
-
       .toggle{
         border:1px solid var(--panel-border); background:white; color:var(--text);
         border-radius:10px; padding:6px 10px; font-size:13px;
       }
-
-      /* Hide desktop header on mobile (we have the handle) */
-      .desktop-header { display:none; }
+      .desktop-header{display:none;}
     }
 
-    /* Desktop: show title row; mobile uses bottom sheet header */
-    .desktop-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+    .desktop-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;}
   </style>
 
   <script type="importmap">
@@ -120,23 +123,19 @@
   }
   </script>
 
-  <script> window.APP_VERSION = "0.9.2"; </script>
+  <script> window.APP_VERSION = "0.9.3"; </script>
 </head>
 <body>
 <div id="app">
-  <aside id="sidebar"><!-- expanded by default -->
-    <!-- Desktop header -->
+  <aside id="sidebar">
     <div class="desktop-header">
       <h1>Organic Lamp Designer <span id="version"></span></h1>
     </div>
-
-    <!-- Mobile bottom-sheet handle (sticky) -->
     <div class="sheet-handle">
       <div class="dragbar"></div>
       <button id="togglePanel" class="toggle">Collapse</button>
     </div>
 
-    <!-- SCROLLABLE AREA -->
     <div class="sheet-content">
       <div class="row"><label><span>Height (mm)</span><span id="val_height"></span></label><input id="height" type="range" min="120" max="250" value="230"></div>
       <div class="row"><label><span>Base Radius (mm)</span><span id="val_rbase"></span></label><input id="rbase" type="range" min="40" max="64" value="64"></div>
@@ -177,6 +176,8 @@
       </div>
 
       <div class="note">Hanging lamp preview. Vase-mode preview; internal ~0.7 mm wall for manufacturing. E27 hole fixed.</div>
+
+      <button id="downloadSTL" class="download-btn">⬇ Download STL</button>
     </div>
   </aside>
 
@@ -193,11 +194,9 @@
 
   function applyInitialState(){
     if (mq.matches){
-      // Mobile: expanded so it’s scrollable immediately
       aside.classList.remove('collapsed');
       btn.textContent = 'Collapse';
-    }else{
-      // Desktop: plain sidebar
+    } else {
       aside.classList.remove('collapsed');
       btn.textContent = 'Controls';
     }
@@ -205,7 +204,7 @@
   }
 
   function togglePanel(){
-    if (!mq.matches) return; // desktop: ignore
+    if (!mq.matches) return;
     const collapsed = aside.classList.toggle('collapsed');
     btn.textContent = collapsed ? 'Expand' : 'Collapse';
     forceResize();
@@ -214,7 +213,6 @@
   btn.addEventListener('click', togglePanel);
   mq.addEventListener?.('change', applyInitialState);
   window.addEventListener('orientationchange', applyInitialState, { passive:true });
-
   applyInitialState();
 </script>
 </body>
