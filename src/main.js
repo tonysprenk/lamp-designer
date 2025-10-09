@@ -2,6 +2,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { STLExporter } from "three/addons/exporters/STLExporter.js";
 
 import { params, clampForBambu } from "@app/params.js";
 import { makeMaterial } from "@app/materials.js";
@@ -23,24 +24,18 @@ function getStageWidth() {
   const appW = app?.clientWidth || window.innerWidth;
 
   if (!isMobile()) {
-    // Desktop: sidebar consumes a fixed grid column (≈360px)
-    const asideW = aside?.offsetWidth || 360;
+    const asideW = aside?.offsetWidth || 360;     // left sidebar on desktop
     return Math.max(200, appW - asideW);
   }
-  // Mobile: panel sits at bottom, so stage uses full width
-  return appW;
+  return appW;                                     // full width on mobile (panel is bottom sheet)
 }
 
 function getStageHeight() {
   const aside = document.getElementById("sidebar");
   const winH = window.innerHeight;
 
-  if (!isMobile()) {
-    // Desktop: full height for stage
-    return winH;
-  }
-  // Mobile: subtract bottom sheet height (collapsed or expanded)
-  const panelH = aside ? aside.offsetHeight : 0;
+  if (!isMobile()) return winH;                    // desktop: full height
+  const panelH = aside ? aside.offsetHeight : 0;   // mobile: subtract bottom sheet height
   return Math.max(200, winH - panelH);
 }
 
@@ -50,12 +45,14 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(getStageWidth(), getStageHeight());
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.15;               // slightly brighter for metals
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e1116); // dark stage so lamp pops
+scene.background = new THREE.Color(0x0e1116);      // keep stage dark so lamp pops
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
+// If your Three version supports it, this brightens env reflections a touch:
+if ("environmentIntensity" in scene) scene.environmentIntensity = 1.2;
 
 // ---- Camera & controls ----
 const camera = new THREE.PerspectiveCamera(
@@ -66,7 +63,7 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(420, -420, 240);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 115);
 controls.enableDamping = true;
 controls.update();
@@ -83,11 +80,25 @@ export function forceResize() {
 }
 window.addEventListener("resize", forceResize, { passive: true });
 
-// ---- Lights & helpers ----
-scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
-const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-dir.position.set(300, -300, 480);
-scene.add(dir);
+// ---- Brighter, neutral lighting rig ----
+// Soft ambient to lift shadows
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+// Hemisphere fill
+const hemi = new THREE.HemisphereLight(0xffffff, 0xdde3f0, 0.9);
+hemi.position.set(0, 1, 0);
+scene.add(hemi);
+// Key (warm) from front-right
+const key = new THREE.DirectionalLight(0xfff0de, 1.2);
+key.position.set(350, -180, 420);
+scene.add(key);
+// Fill (cool) from front-left
+const fill = new THREE.DirectionalLight(0xe9f2ff, 0.8);
+fill.position.set(-320, -260, 300);
+scene.add(fill);
+// Rim (cool) from behind for silhouette on metals
+const rim = new THREE.DirectionalLight(0xdfeaff, 0.7);
+rim.position.set(-200, 260, 480);
+scene.add(rim);
 
 // Subtle grid at z=0 for orientation
 const grid = new THREE.GridHelper(800, 40, 0x294059, 0x1a283b);
@@ -95,8 +106,9 @@ grid.rotation.x = Math.PI / 2;
 grid.position.z = 0;
 scene.add(grid);
 
-let group;
-let materialOuter;
+let group;               // whole lamp assembly
+let materialOuter;       // visual material for the shade
+const exporter = new STLExporter();
 
 function rebuild() {
   // Focus on hanging mode
@@ -118,7 +130,7 @@ function rebuild() {
   // Clear previous
   if (group) {
     scene.remove(group);
-    group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    group.traverse(o => { if (o.geometry) o.geometry.dispose?.(); });
   }
   group = new THREE.Group();
 
@@ -131,10 +143,10 @@ function rebuild() {
   // ---- Hanging: cable → socket → bulb → top cap ----
   const capH = 5;
 
-  // Bulb depth: hang it inside the shade (70% of height is a good start)
+  // Bulb depth: hang it inside the shade (~70% of height)
   const bulbZ = params.height * 0.70;
 
-  // Bulb mesh (simple frosted sphere)
+  // Bulb mesh (frosted-ish glass look)
   const bulbMesh = new THREE.Mesh(
     new THREE.SphereGeometry(10, 32, 32),
     new THREE.MeshPhysicalMaterial({
@@ -154,8 +166,8 @@ function rebuild() {
   bulbLight.position.set(0, 0, bulbZ);
   group.add(bulbLight);
 
-  // Cable from hanger point down to the socket just above bulb
-  const cableTopZ = params.height + 150;  // hanger point above lamp
+  // Cable from hanger point down to socket above bulb
+  const cableTopZ = params.height + 150;  // hanger point above top opening
   const socketH = 12;
   const socketR = 6;
   const socketTopZ = bulbZ + 8;           // where cable meets socket
@@ -165,7 +177,7 @@ function rebuild() {
     new THREE.CylinderGeometry(2, 2, cableLen, 24),
     new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.9 })
   );
-  cable.rotation.x = Math.PI / 2; // orient cylinder along Z
+  cable.rotation.x = Math.PI / 2;         // along world Z
   cable.position.z = (cableTopZ + socketTopZ) * 0.5;
   group.add(cable);
 
@@ -175,7 +187,7 @@ function rebuild() {
     new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.6, metalness: 0.3 })
   );
   socket.rotation.x = Math.PI / 2;
-  socket.position.z = socketTopZ - socketH * 0.5; // sits just above bulb
+  socket.position.z = socketTopZ - socketH * 0.5;
   group.add(socket);
 
   // Top cap (conforms to inner shape)
@@ -192,7 +204,7 @@ function rebuild() {
 
   scene.add(group);
 
-  // After rebuild, ensure canvas uses the current layout space
+  // Make sure canvas matches current layout (esp. mobile bottom sheet)
   forceResize();
 }
 
@@ -205,25 +217,15 @@ bindRange("amp", "amp", params, rebuild, v => Number(v).toFixed(2));
 bindRange("twist", "twist", params, rebuild);
 
 bindSelect("ripdir", "ripdir", params, rebuild);
-// Mount is forced to "hanging" internally; binding is harmless for now:
+// Mount is forced to "hanging" internally; binding is harmless:
 bindSelect("mount", "mount", params, rebuild);
 bindSelect("finish", "finish", params, rebuild);
 bindSelect("res", "res", params, rebuild);
 
-// ---- Render loop ----
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-rebuild();
-
-// ---- STL download ----
-import { STLExporter } from "three/addons/exporters/STLExporter.js";
-const exporter = new STLExporter();
-
+// ---- STL download button ----
 document.getElementById("downloadSTL")?.addEventListener("click", () => {
   if (!group) return;
+  // Export exactly what you see in the viewer
   const stl = exporter.parse(group);
   const blob = new Blob([stl], { type: "application/sla" });
   const a = document.createElement("a");
@@ -232,4 +234,12 @@ document.getElementById("downloadSTL")?.addEventListener("click", () => {
   a.click();
 });
 
+// ---- Render loop ----
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+rebuild();
 animate();
