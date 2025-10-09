@@ -217,4 +217,19 @@ function animate() {
   renderer.render(scene, camera);
 }
 rebuild();
+
+// ---- STL download ----
+import { STLExporter } from "three/addons/exporters/STLExporter.js";
+const exporter = new STLExporter();
+
+document.getElementById("downloadSTL")?.addEventListener("click", () => {
+  if (!group) return;
+  const stl = exporter.parse(group);
+  const blob = new Blob([stl], { type: "application/sla" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "organic_lamp.stl";
+  a.click();
+});
+
 animate();
